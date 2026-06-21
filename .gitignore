@@ -1,0 +1,28 @@
+# Dependências
+node_modules/
+
+# Variáveis de ambiente / segredos
+.env
+*.env.local
+
+# Ferramentas (Claude Code / remember)
+.claude/
+.remember/
+
+# Sistema operacional
+Thumbs.db
+.DS_Store
+
+# Arquivos baixados / temporários
+*.zip
+consult-price-api-main/
+
+# Expo / React Native (app)
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
