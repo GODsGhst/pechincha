@@ -1,0 +1,141 @@
+import { useState, useCallback } from 'react';
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { api } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { colors, fonts, radius } from '../theme';
+import { formatBRL } from '../utils/format';
+
+const CATEGORIAS = [
+  { nome: 'Alimentos', icone: 'fast-food-outline' },
+  { nome: 'Bebidas', icone: 'wine-outline' },
+  { nome: 'Limpeza', icone: 'sparkles-outline' },
+  { nome: 'Higiene', icone: 'water-outline' },
+  { nome: 'Açougue', icone: 'restaurant-outline' },
+];
+
+export default function HomeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const { usuario } = useAuth();
+  const [itens, setItens] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+
+  const carregar = useCallback(async () => {
+    try {
+      const { menores_precos } = await api.get('/produtos/menores?limite=6');
+      setItens(menores_precos || []);
+    } catch (_e) {
+      setItens([]);
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => { carregar(); }, [carregar]));
+
+  return (
+    <View style={styles.tela}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.headerTopo}>
+          <Text style={styles.marca}>Consult<Text style={{ color: '#5FD698' }}>Price</Text></Text>
+          <View style={styles.headerIcones}>
+            <Pressable onPress={() => navigation.navigate('Area')} accessibilityLabel="Área de pesquisa">
+              <Ionicons name="location-outline" size={22} color="#BfE8D2" />
+            </Pressable>
+            <Pressable onPress={() => navigation.navigate('Lista')} accessibilityLabel="Minha lista">
+              <Ionicons name="cart-outline" size={22} color="#BfE8D2" />
+            </Pressable>
+          </View>
+        </View>
+        <Pressable style={styles.busca} onPress={() => navigation.navigate('Buscar')}>
+          <Ionicons name="search" size={18} color={colors.inkMuted} />
+          <Text style={styles.buscaTexto}>Buscar produto…</Text>
+        </Pressable>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={false} onRefresh={carregar} tintColor={colors.brand} />}
+      >
+        <View style={styles.comunidade}>
+          <Ionicons name="people" size={20} color={colors.brand} />
+          <Text style={styles.comunidadeTexto}>
+            Olá, {usuario?.nome?.split(' ')[0] || 'bem-vindo'}! Escaneie um cupom e <Text style={{ color: colors.brand, fontFamily: fonts.semibold }}>colabore</Text> com a comunidade.
+          </Text>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 18 }} contentContainerStyle={{ gap: 12 }}>
+          {CATEGORIAS.map((c) => (
+            <Pressable key={c.nome} style={styles.categoria} onPress={() => navigation.navigate('Buscar')}>
+              <View style={styles.categoriaIcone}><Ionicons name={c.icone} size={22} color={colors.brandDark} /></View>
+              <Text style={styles.categoriaNome}>{c.nome}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        <Text style={styles.secao}>Melhores preços</Text>
+
+        {carregando ? (
+          <ActivityIndicator color={colors.brand} style={{ marginTop: 24 }} />
+        ) : itens.length === 0 ? (
+          <View style={styles.vazio}>
+            <Ionicons name="qr-code-outline" size={36} color={colors.inkMuted} />
+            <Text style={styles.vazioTitulo}>Ainda não há preços por aqui</Text>
+            <Text style={styles.vazioTexto}>Escaneie o QR Code do seu primeiro cupom para começar a comparar.</Text>
+            <Pressable style={styles.vazioBotao} onPress={() => navigation.navigate('Scan')}>
+              <Ionicons name="qr-code" size={18} color={colors.white} />
+              <Text style={styles.vazioBotaoTexto}>Escanear agora</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.grade}>
+            {itens.map((it) => (
+              <Pressable
+                key={it.produto_id}
+                style={styles.card}
+                onPress={() => navigation.navigate('Product', { id: it.produto_id, nome: it.produto })}
+              >
+                <View style={styles.cardImg}><Ionicons name="pricetag-outline" size={26} color={colors.inkMuted} /></View>
+                <Text style={styles.cardNome} numberOfLines={2}>{it.produto}</Text>
+                <Text style={styles.cardLabel}>menor preço</Text>
+                <Text style={styles.cardPreco}>{formatBRL(it.valor)}</Text>
+                {it.estabelecimento && <Text style={styles.cardLocal} numberOfLines={1}>{it.estabelecimento}</Text>}
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  tela: { flex: 1, backgroundColor: colors.canvas },
+  header: { backgroundColor: colors.brandDark, paddingHorizontal: 16, paddingBottom: 26, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 },
+  headerTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  marca: { fontFamily: fonts.display, fontSize: 20, color: colors.white },
+  headerIcones: { flexDirection: 'row', gap: 16 },
+  busca: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.white, borderRadius: radius.md, paddingHorizontal: 12, height: 46, marginTop: 14 },
+  buscaTexto: { fontFamily: fonts.body, fontSize: 14, color: colors.inkMuted },
+  comunidade: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 14 },
+  comunidadeTexto: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, lineHeight: 19 },
+  categoria: { alignItems: 'center', gap: 6, width: 64 },
+  categoriaIcone: { width: 52, height: 52, borderRadius: radius.lg, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
+  categoriaNome: { fontFamily: fonts.medium, fontSize: 11, color: colors.inkSoft },
+  secao: { fontFamily: fonts.display, fontSize: 17, color: colors.ink, marginTop: 22, marginBottom: 12 },
+  grade: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
+  card: { width: '47%', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 10 },
+  cardImg: { height: 78, borderRadius: radius.md, backgroundColor: '#F1F0EA', alignItems: 'center', justifyContent: 'center' },
+  cardNome: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink, marginTop: 8, minHeight: 34 },
+  cardLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 4 },
+  cardPreco: { fontFamily: fonts.monoMedium, fontSize: 16, color: colors.brand, marginTop: 2 },
+  cardLocal: { fontFamily: fonts.body, fontSize: 11, color: colors.inkSoft, marginTop: 2 },
+  vazio: { alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 24, marginTop: 8, gap: 8 },
+  vazioTitulo: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink, marginTop: 4 },
+  vazioTexto: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, textAlign: 'center', lineHeight: 19 },
+  vazioBotao: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brand, borderRadius: radius.md, paddingHorizontal: 18, height: 46, marginTop: 8 },
+  vazioBotaoTexto: { fontFamily: fonts.semibold, fontSize: 14, color: colors.white },
+});
