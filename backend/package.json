@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "dev:demo": "node scripts/devDemo.js",
     "test:api": "node scripts/testeApi.js"
   },
   "dependencies": {

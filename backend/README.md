@@ -10,10 +10,13 @@ API REST do Sistema Colaborativo de Comparação de Preços por Cupons Fiscais (
 cd backend
 npm install
 
-# configure o .env (já existe um exemplo)
-cp .env.example .env
+# MODO DEMO — sobe um MongoDB em memória já populado com dados de exemplo.
+# Não precisa instalar nem configurar banco. Os dados somem ao encerrar.
+npm run dev:demo
+#   Login de teste: demo@consultprice.com / senha123
 
-# desenvolvimento (com nodemon)
+# desenvolvimento real (precisa do MONGODB_URI no .env — Atlas ou local)
+cp .env.example .env
 npm run dev
 
 # produção
