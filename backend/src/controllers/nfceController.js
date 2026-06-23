@@ -48,6 +48,15 @@ async function processar(req, res, next) {
     const dados = parseNfceHtml(conteudoHtml);
 
     if (!dados.itens || dados.itens.length === 0) {
+      // Diagnóstico: registra a estrutura recebida para ajustar o parser
+      const titulo = (String(conteudoHtml).match(/<title>([\s\S]*?)<\/title>/i) || [])[1] || '';
+      console.warn('[NFC-e][SEM ITENS] url=%s | tamanho=%d | titulo=%s | temTabResult=%s | qtdTabelas=%d',
+        url_origem || '(html direto)',
+        String(conteudoHtml).length,
+        titulo.trim().slice(0, 80),
+        /tabResult/i.test(conteudoHtml),
+        (String(conteudoHtml).match(/<table/gi) || []).length);
+      console.warn('[NFC-e][SEM ITENS] trecho:', String(conteudoHtml).replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\s+/g, ' ').slice(0, 800));
       return res.status(422).json({ error: 'Nenhum item encontrado no HTML da NFC-e' });
     }
     if (!dados.estabelecimento.nome && !dados.estabelecimento.cnpj) {

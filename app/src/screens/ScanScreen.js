@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
 import { colors, fonts, radius } from '../theme';
@@ -43,6 +44,46 @@ export default function ScanScreen({ navigation }) {
       }
     } finally {
       setProcessando(false);
+    }
+  }
+
+  // Testar com uma foto salva: envia a imagem ao backend, que decodifica o
+  // QR (jimp + qrcode-reader), busca a SEFAZ e analisa.
+  async function processarImagem(imagemBase64) {
+    setProcessando(true);
+    setErro(null);
+    try {
+      const r = await api.post('/nfce/processar', { imagem_base64: imagemBase64 });
+      setResultado(r);
+    } catch (e) {
+      if (e.status === 409) {
+        setErro('Este cupom já foi cadastrado. Cada nota conta uma vez só.');
+      } else {
+        setErro(e.message || 'Não foi possível processar esta imagem.');
+      }
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  async function escolherDaGaleria() {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        setErro('Autorize o acesso às fotos para testar pela galeria.');
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.8 });
+      if (res.canceled) return;
+      const asset = res.assets && res.assets[0];
+      if (!asset || !asset.base64) {
+        setErro('Não consegui ler a imagem escolhida.');
+        return;
+      }
+      setLido(true);
+      processarImagem(`data:image/jpeg;base64,${asset.base64}`);
+    } catch (_e) {
+      setErro('Erro ao abrir a galeria.');
     }
   }
 
@@ -144,7 +185,8 @@ export default function ScanScreen({ navigation }) {
 
         <View style={styles.barraBaixo}>
           <Controle icone={flash ? 'flash' : 'flash-off'} rotulo="Flash" onPress={() => setFlash((f) => !f)} ativo={flash} />
-          <Controle icone="help-circle-outline" rotulo="Dúvidas" onPress={() => setErro('Abra a nota no app do supermercado ou aponte para o QR Code impresso no cupom.')} />
+          <Controle icone="images-outline" rotulo="Galeria" onPress={escolherDaGaleria} />
+          <Controle icone="help-circle-outline" rotulo="Dúvidas" onPress={() => setErro('Aponte para o QR Code do cupom, ou use a Galeria para testar com uma foto salva.')} />
         </View>
       </SafeAreaView>
     </View>

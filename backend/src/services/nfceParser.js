@@ -80,32 +80,51 @@ function parseNfceHtml(html) {
   }
 
   // --- Itens ---
+  // O layout varia muito entre estados/emissores, então tentamos várias
+  // fontes de linhas e, dentro de cada linha, vários jeitos de achar
+  // nome/quantidade/preço, com fallback por regex de preço pt-BR.
   const itens = [];
-  $('#tabResult tr').each((_i, tr) => {
-    const linha = $(tr);
-    const nome = linha.find('.txtTit2').first().text().trim() ||
-      linha.find('.txtTit').first().text().trim();
-    if (!nome) return;
+  const REGEX_PRECO = /\d{1,3}(?:\.\d{3})*,\d{2}/g;
+  const ROTULOS = /^(c[óo]d(igo)?|descri|qtde?|un|vl\.?|valor|total|item|produto|pre[çc]o|c[óo]digo)\b/i;
 
-    const qtdTexto = linha.find('.Rqtd').text();
-    const unitTexto = linha.find('.RvlUnit').text();
-    const totalTexto = linha.find('.valor').first().text();
+  function processarLinhas(linhas) {
+    linhas.each((_i, tr) => {
+      const linha = $(tr);
+      const nome = (
+        linha.find('.txtTit2').first().text().trim() ||
+        linha.find('.txtTit').first().text().trim() ||
+        linha.find('span').first().text().trim()
+      );
+      if (!nome || nome.length < 2 || ROTULOS.test(nome)) return;
 
-    const quantidade = parseNumeroBR(qtdTexto.replace(/Qtde\.?:?/i, '')) || 1;
-    let valorUnitario = parseNumeroBR(unitTexto.replace(/Vl\.?\s*Unit\.?:?/i, ''));
-    let valorTotalItem = parseNumeroBR(totalTexto);
+      const qtdTexto = linha.find('.Rqtd').text();
+      const unitTexto = linha.find('.RvlUnit').text();
+      let totalTexto = linha.find('.valor').first().text();
+      // fallback: último preço com formato pt-BR na linha (costuma ser o total do item)
+      if (!parseNumeroBR(totalTexto)) {
+        const precos = linha.text().match(REGEX_PRECO);
+        if (precos && precos.length) totalTexto = precos[precos.length - 1];
+      }
 
-    if (valorUnitario === null && valorTotalItem !== null) valorUnitario = valorTotalItem / quantidade;
-    if (valorTotalItem === null && valorUnitario !== null) valorTotalItem = valorUnitario * quantidade;
-    if (valorUnitario === null && valorTotalItem === null) return;
+      const quantidade = parseNumeroBR(qtdTexto.replace(/Qtde\.?:?/i, '')) || 1;
+      let valorUnitario = parseNumeroBR(unitTexto.replace(/Vl\.?\s*Unit\.?:?/i, ''));
+      let valorTotalItem = parseNumeroBR(totalTexto);
 
-    itens.push({
-      nome,
-      quantidade,
-      valor_unitario: Number(valorUnitario.toFixed(4)),
-      valor_total: Number(valorTotalItem.toFixed(2))
+      if (valorUnitario === null && valorTotalItem !== null) valorUnitario = valorTotalItem / quantidade;
+      if (valorTotalItem === null && valorUnitario !== null) valorTotalItem = valorUnitario * quantidade;
+      if (valorUnitario === null && valorTotalItem === null) return;
+
+      itens.push({
+        nome,
+        quantidade,
+        valor_unitario: Number(valorUnitario.toFixed(4)),
+        valor_total: Number(valorTotalItem.toFixed(2))
+      });
     });
-  });
+  }
+
+  processarLinhas($('#tabResult tr')); // layout padrão SEFAZ
+  if (itens.length === 0) processarLinhas($('table tr')); // fallback: qualquer tabela
 
   if (valorTotal === null && itens.length > 0) {
     valorTotal = Number(itens.reduce((soma, i) => soma + i.valor_total, 0).toFixed(2));
