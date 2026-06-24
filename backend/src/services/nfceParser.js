@@ -1,6 +1,24 @@
 const cheerio = require('cheerio');
 
-// Converte número em formato pt-BR ("1.234,56") para Number (1234.56)
+// Número em formato monetário/quantidade pt-BR -> Number.
+// Lida com "R$ 1.234,56" (vírgula decimal) E "1.000" / "0.550" (ponto decimal,
+// como a SEFAZ-MG usa nas quantidades). Por isso NÃO assume ponto = milhar
+// quando não há vírgula.
+function parseValorBR(texto) {
+  if (texto === undefined || texto === null) return null;
+  let s = String(texto).replace(/R\$/g, '').replace(/[^\d.,]/g, '').trim();
+  if (s === '') return null;
+  if (s.includes('.') && s.includes(',')) {
+    s = s.replace(/\./g, '').replace(',', '.'); // 1.234,56 -> 1234.56
+  } else if (s.includes(',')) {
+    s = s.replace(',', '.'); // 7,99 -> 7.99
+  }
+  // só pontos ("1.000") ou só dígitos ficam como estão (ponto = decimal)
+  const n = parseFloat(s);
+  return Number.isNaN(n) ? null : n;
+}
+
+// Mantido para compatibilidade: trata ponto como separador de milhar.
 function parseNumeroBR(texto) {
   if (texto === undefined || texto === null) return null;
   const limpo = String(texto).replace(/[^\d.,-]/g, '');
@@ -8,6 +26,10 @@ function parseNumeroBR(texto) {
   const normalizado = limpo.replace(/\./g, '').replace(',', '.');
   const numero = Number(normalizado);
   return Number.isNaN(numero) ? null : numero;
+}
+
+function limpar(texto) {
+  return (texto || '').replace(/\s+/g, ' ').trim();
 }
 
 // Converte data "01/06/2025 14:30:00" para Date
@@ -19,16 +41,12 @@ function parseDataBR(texto) {
   return new Date(Number(ano), Number(mes) - 1, Number(dia), Number(hora), Number(min), Number(seg || 0));
 }
 
-// Chave de acesso da NFC-e: 44 dígitos, identificador nacional único da nota.
-// Costuma aparecer agrupada com espaços a cada 4 dígitos no cupom.
+// Chave de acesso da NFC-e: 44 dígitos.
 function extrairChaveAcesso(texto) {
   if (!texto) return null;
-  // Junta dígitos separados apenas por espaços ("1234 5678" -> "12345678")
   const colado = String(texto).replace(/(?<=\d)\s+(?=\d)/g, '');
-  // Após o rótulo "Chave de acesso", se houver
   const rotulo = colado.match(/Chave\s*de\s*acesso[:\s]*(\d{44})/i);
   if (rotulo) return rotulo[1];
-  // Fallback: qualquer sequência isolada de exatamente 44 dígitos
   const generico = colado.match(/(?<!\d)\d{44}(?!\d)/);
   return generico ? generico[0] : null;
 }
@@ -42,52 +60,63 @@ function chaveAcessoDaUrl(url) {
   return digitos.length >= 44 ? digitos.slice(0, 44) : null;
 }
 
-// A estrutura do HTML da NFC-e varia por estado e sistema emissor,
-// por isso cada campo tenta seletores específicos antes de cair em regex
-// sobre o texto completo da página.
-function parseNfceHtml(html) {
-  const $ = cheerio.load(html);
-  const textoPagina = $('body').text().replace(/\s+/g, ' ');
-
-  // --- Estabelecimento ---
-  const nomeEstabelecimento =
-    $('.txtTopo').first().text().trim() ||
-    $('#u20').first().text().trim() ||
+// --- Estabelecimento (emitente) ---
+function extrairEstabelecimento($, textoPagina) {
+  // Nome: SEFAZ-MG usa <thead b>; outros layouts usam .txtTopo / #u20
+  const nome =
+    limpar($('thead b').first().text()) ||
+    limpar($('.txtTopo').first().text()) ||
+    limpar($('#u20').first().text()) ||
     null;
 
   const cnpjMatch = textoPagina.match(/CNPJ[:\s]*([\d]{2}\.?[\d]{3}\.?[\d]{3}\/?[\d]{4}-?[\d]{2})/i);
   const cnpj = cnpjMatch ? cnpjMatch[1].replace(/[^\d]/g, '') : null;
 
-  // Endereço costuma ser o bloco .text logo após o CNPJ
+  // Endereço: SEFAZ-MG põe na 2ª célula da tabela do cabeçalho
   let endereco = null;
-  $('.text').each((_i, el) => {
-    const t = $(el).text().replace(/\s+/g, ' ').trim();
-    if (!endereco && t && !/CNPJ/i.test(t)) endereco = t;
-  });
-
-  // --- Data de emissão ---
-  const emissaoMatch = textoPagina.match(/Emiss[ãa]o[:\s]*(\d{2}\/\d{2}\/\d{4}[\sT]*\d{2}:\d{2}(?::\d{2})?)/i);
-  const dataCompra = parseDataBR(emissaoMatch ? emissaoMatch[1] : textoPagina);
-
-  // --- Valor total ---
-  let valorTotal = null;
-  const totalEl = $('.totalNumb.txtMax').first().text() || $('.txtMax').first().text();
-  valorTotal = parseNumeroBR(totalEl);
-  if (valorTotal === null) {
-    const totalMatch = textoPagina.match(/Valor a pagar[^\d]*([\d.,]+)/i) ||
-      textoPagina.match(/Valor total[^\d]*([\d.,]+)/i);
-    valorTotal = totalMatch ? parseNumeroBR(totalMatch[1]) : null;
+  const celulasCabecalho = $('table.table.text-center tbody td');
+  if (celulasCabecalho.length >= 2) {
+    endereco = limpar($(celulasCabecalho.get(1)).text());
+  }
+  if (!endereco) {
+    $('.text').each((_i, el) => {
+      const t = limpar($(el).text());
+      if (!endereco && t && !/CNPJ/i.test(t)) endereco = t;
+    });
   }
 
-  // --- Itens ---
-  // O layout varia muito entre estados/emissores, então tentamos várias
-  // fontes de linhas e, dentro de cada linha, vários jeitos de achar
-  // nome/quantidade/preço, com fallback por regex de preço pt-BR.
+  return { nome, cnpj, endereco };
+}
+
+// --- Itens (SEFAZ-MG: #myTable com <h7> e 4 células) ---
+function extrairItensMG($) {
+  const itens = [];
+  $('#myTable tr').each((_i, tr) => {
+    const tds = $(tr).find('td');
+    if (tds.length < 4) return;
+    const nome = limpar($(tds.get(0)).find('h7').text());
+    if (!nome) return;
+    const quantidade = parseValorBR($(tds.get(1)).text()) || 1;
+    const valorTotalItem = parseValorBR($(tds.get(3)).text());
+    if (valorTotalItem === null) return;
+    const valorUnitario = quantidade ? valorTotalItem / quantidade : valorTotalItem;
+    itens.push({
+      nome,
+      quantidade,
+      valor_unitario: Number(valorUnitario.toFixed(4)),
+      valor_total: Number(valorTotalItem.toFixed(2))
+    });
+  });
+  return itens;
+}
+
+// --- Itens (layout #tabResult / genérico) ---
+function extrairItensTabela($) {
   const itens = [];
   const REGEX_PRECO = /\d{1,3}(?:\.\d{3})*,\d{2}/g;
-  const ROTULOS = /^(c[óo]d(igo)?|descri|qtde?|un|vl\.?|valor|total|item|produto|pre[çc]o|c[óo]digo)\b/i;
+  const ROTULOS = /^(c[óo]d(igo)?|descri|qtde?|un|vl\.?|valor|total|item|produto|pre[çc]o)\b/i;
 
-  function processarLinhas(linhas) {
+  function processar(linhas) {
     linhas.each((_i, tr) => {
       const linha = $(tr);
       const nome = (
@@ -100,7 +129,6 @@ function parseNfceHtml(html) {
       const qtdTexto = linha.find('.Rqtd').text();
       const unitTexto = linha.find('.RvlUnit').text();
       let totalTexto = linha.find('.valor').first().text();
-      // fallback: último preço com formato pt-BR na linha (costuma ser o total do item)
       if (!parseNumeroBR(totalTexto)) {
         const precos = linha.text().match(REGEX_PRECO);
         if (precos && precos.length) totalTexto = precos[precos.length - 1];
@@ -123,15 +151,42 @@ function parseNfceHtml(html) {
     });
   }
 
-  processarLinhas($('#tabResult tr')); // layout padrão SEFAZ
-  if (itens.length === 0) processarLinhas($('table tr')); // fallback: qualquer tabela
+  processar($('#tabResult tr'));
+  if (itens.length === 0) processar($('table tr'));
+  return itens;
+}
 
-  if (valorTotal === null && itens.length > 0) {
+// A estrutura do HTML da NFC-e varia por estado e sistema emissor; tentamos
+// o layout SEFAZ-MG (#myTable) primeiro e depois o genérico (#tabResult).
+function parseNfceHtml(html) {
+  const $ = cheerio.load(html);
+  const textoPagina = limpar($('body').text());
+
+  const estabelecimento = extrairEstabelecimento($, textoPagina);
+
+  const emissaoMatch = textoPagina.match(/Emiss[ãa]o[:\s]*(\d{2}\/\d{2}\/\d{4}[\sT]*\d{2}:\d{2}(?::\d{2})?)/i);
+  const dataCompra = parseDataBR(emissaoMatch ? emissaoMatch[1] : textoPagina);
+
+  let itens = extrairItensMG($);
+  if (itens.length === 0) itens = extrairItensTabela($);
+
+  // Valor total: soma dos itens (mais confiável entre layouts); cai para
+  // seletores/regex só quando não há itens.
+  let valorTotal = null;
+  if (itens.length > 0) {
     valorTotal = Number(itens.reduce((soma, i) => soma + i.valor_total, 0).toFixed(2));
+  } else {
+    const totalEl = $('.totalNumb.txtMax').first().text() || $('.txtMax').first().text();
+    valorTotal = parseValorBR(totalEl);
+    if (valorTotal === null) {
+      const totalMatch = textoPagina.match(/Valor a pagar[^\d]*([\d.,]+)/i) ||
+        textoPagina.match(/Valor total[^\d]*([\d.,]+)/i);
+      valorTotal = totalMatch ? parseValorBR(totalMatch[1]) : null;
+    }
   }
 
   return {
-    estabelecimento: { nome: nomeEstabelecimento, cnpj, endereco },
+    estabelecimento,
     chave_acesso: extrairChaveAcesso(textoPagina),
     data_compra: dataCompra,
     valor_total: valorTotal,
@@ -139,4 +194,4 @@ function parseNfceHtml(html) {
   };
 }
 
-module.exports = { parseNfceHtml, parseNumeroBR, parseDataBR, extrairChaveAcesso, chaveAcessoDaUrl };
+module.exports = { parseNfceHtml, parseNumeroBR, parseValorBR, parseDataBR, extrairChaveAcesso, chaveAcessoDaUrl };

@@ -1,20 +1,11 @@
 const Produto = require('../models/Produto');
 const HistoricoPreco = require('../models/HistoricoPreco');
+const productNormalizer = require('./productNormalizer');
 
-function escapeRegex(texto) {
-  return texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// Deduplicação: busca produto por nome (case-insensitive); cria se não existir.
-// Retorna { produto, novo }.
+// Deduplicação de produtos: delega ao normalizador (fuzzy matching com fuse.js),
+// que trata as variações de escrita da notinha antes de salvar.
 async function encontrarOuCriarProduto(nomeItem) {
-  const existente = await Produto.findOne({
-    nome: { $regex: `^${escapeRegex(nomeItem)}$`, $options: 'i' }
-  });
-  if (existente) return { produto: existente, novo: false };
-
-  const criado = await Produto.create({ nome: nomeItem });
-  return { produto: criado, novo: true };
+  return productNormalizer.encontrarOuCriarProduto(nomeItem);
 }
 
 // Registra o preço no histórico e atualiza menor_preco / ultimo_preco do produto

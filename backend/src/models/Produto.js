@@ -1,9 +1,11 @@
 const mongoose = require('mongoose');
 
 const produtoSchema = new mongoose.Schema({
-  nome:        { type: String, required: true, trim: true },
-  categoria:   { type: String },
-  menor_preco: { type: Number, default: null },
+  nome:             { type: String, required: true, trim: true },
+  nome_normalizado: { type: String, index: true }, // sem acento/caixa, p/ dedup e busca
+  marca:            { type: String, default: null }, // opcional — null = sem marca
+  categoria:        { type: String },
+  menor_preco:      { type: Number, default: null },
   ultimo_preco: {
     valor:              { type: Number },
     data:               { type: Date },
