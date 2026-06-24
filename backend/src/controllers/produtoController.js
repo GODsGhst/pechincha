@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Produto = require('../models/Produto');
 const HistoricoPreco = require('../models/HistoricoPreco');
+const productNormalizer = require('../services/productNormalizer');
 
 function escapeRegex(texto) {
   return texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -13,14 +14,20 @@ function idValido(id) {
 // GET /api/produtos?nome=arroz
 async function listar(req, res, next) {
   try {
-    const filtro = {};
+    let produtos;
     if (req.query.nome) {
-      filtro.nome = { $regex: escapeRegex(req.query.nome), $options: 'i' };
+      // Busca tolerante (acentos, caixa, ordem das palavras, tokens faltando)
+      const encontrados = await productNormalizer.buscarProdutos(req.query.nome);
+      const ids = encontrados.map((p) => p._id);
+      const populados = await Produto.find({ _id: { $in: ids } })
+        .populate('ultimo_preco.estabelecimento_id', 'nome');
+      const porId = new Map(populados.map((p) => [String(p._id), p]));
+      produtos = ids.map((id) => porId.get(String(id))).filter(Boolean); // mantém a ordem de relevância
+    } else {
+      produtos = await Produto.find()
+        .sort({ nome: 1 })
+        .populate('ultimo_preco.estabelecimento_id', 'nome');
     }
-
-    const produtos = await Produto.find(filtro)
-      .sort({ nome: 1 })
-      .populate('ultimo_preco.estabelecimento_id', 'nome');
 
     return res.json({
       produtos: produtos.map((p) => ({
