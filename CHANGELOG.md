@@ -193,3 +193,42 @@ Commits relevantes (branch `main` de `pechincha`): backend inicial, app móvel, 
 Nesta sessão, o **backend** (`dev:demo`, porta 3001) e o **Metro** (porta 8081)
 foram iniciados em background pelo assistente. Eles **encerram ao fechar a
 sessão do Claude**. Para rodar de novo, siga a seção 3.
+
+---
+
+## 11. Atualizações de 2026-06-24
+
+**Parser SEFAZ-MG (resolve "não lê a notinha").** A API do professor
+(`github.com/saulinho/consult-price`) revelou que o cupom de MG usa
+`#myTable`/`<h7>` e quantidade com **ponto decimal** (`0.550`). O
+`nfceParser.js` foi reescrito para ler esse layout (mantendo fallback pro
+antigo). Testado no cupom real do professor: CASA RENA, 15 itens, R$ 124,10.
+
+**Tratamento de dados (`productNormalizer.js` + fuse.js).** Normaliza a
+descrição (acento/caixa/espaço) e deduplica por similaridade **antes de
+salvar**: variações de escrita viram 1 produto, tamanhos diferentes ficam
+separados, produto **sem marca** é aceito (campo `marca` opcional no Produto,
+e `nome_normalizado` indexado). Inspirado na API do professor. Testes:
+`npm run test:norm` (6/6) e `npm run test:api` (32/32).
+
+**Busca fuzzy.** `GET /produtos?nome=` agora usa o normalizador (tolera
+acento, caixa, ordem das palavras e tokens faltando).
+
+**Rastreabilidade/privacidade (já estava no código):** cada compra grava
+`usuario_id` (ligada ao perfil); `/compras` filtra pelo usuário (privado);
+dedup por chave de acesso retorna 409 (sem releitura).
+
+**App nativo / APK.** `npx expo prebuild -p android` gerou a pasta
+`app/android/` — agora é um projeto **nativo de verdade** (não só Expo Go).
+Criados `app/eas.json` e `app/COMO-GERAR-APK.md`. O build local do APK
+**falhou por falta de espaço em disco** (C: estava 100% cheio) — não é
+problema de código. Para gerar o APK: liberar disco + Android Studio, OU
+**EAS Build** (nuvem, recomendado — ver COMO-GERAR-APK.md).
+
+**⚠️ Bloqueador de ambiente:** disco C: **100% cheio**. Builds nativos e até
+rodar os servidores ficam instáveis até liberar vários GB.
+
+**Pendências atualizadas:** gerar o APK (EAS ou Android Studio, após liberar
+disco); deploy do backend + setar `expo.extra.apiUrl` para o APK standalone
+falar com a API; persistência do carrinho (AsyncStorage); subir no repo do
+grupo via fork+PR.
