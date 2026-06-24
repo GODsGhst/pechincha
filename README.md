@@ -11,7 +11,7 @@ Projeto da FANS (Faculdade de Nova Serrana).
 ```
 pechincha/
 ├── backend/   API REST (Node.js + Express + MongoDB)
-└── app/       Aplicativo híbrido (Expo / React Native) — iOS e Android
+└── app/       Aplicativo mobile (Expo / React Native) — roda no Expo Go
 ```
 
 ## Backend
@@ -24,6 +24,7 @@ cd backend
 npm install
 cp .env.example .env   # configure o MONGODB_URI e o JWT_SECRET
 npm run dev            # sobe a API
+npm run dev:persist    # sobe uma API local persistente em backend/.data/mongodb
 npm run test:api       # teste de ponta a ponta (MongoDB em memória)
 ```
 
@@ -33,7 +34,7 @@ Endpoints principais: `/api/auth`, `/api/nfce/processar`, `/api/produtos`,
 
 ## App (em construção)
 
-Aplicativo híbrido focado em dois gestos de baixo atrito:
+Aplicativo mobile em Expo/React Native focado em dois gestos de baixo atrito:
 
 1. **Escanear** o QR Code do cupom (ação central, sempre ao alcance do polegar).
 2. **Carrinho** — montar uma lista de itens desejados e ver onde a cesta sai
@@ -58,4 +59,4 @@ para reforçar o hábito de escanear).
 ## Stack
 
 - **Backend:** Node.js, Express, MongoDB (Mongoose), JWT, Cheerio, jimp + qrcode-reader
-- **App:** Expo (React Native), expo-camera, expo-secure-store
+- **App:** Expo (React Native), expo-camera, expo-location, expo-secure-store

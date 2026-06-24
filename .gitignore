@@ -5,9 +5,11 @@ node_modules/
 .env
 *.env.local
 
-# Ferramentas (Claude Code / remember)
+# Ferramentas (Claude Code / remember / IDEs)
 .claude/
 .remember/
+.idea/
+.vscode/
 
 # Sistema operacional
 Thumbs.db
@@ -21,6 +23,9 @@ consult-price-api-main/
 .expo/
 dist/
 web-build/
+# pastas nativas geradas pelo prebuild (recriadas com `npx expo prebuild`)
+app/android/
+app/ios/
 *.jks
 *.p8
 *.p12

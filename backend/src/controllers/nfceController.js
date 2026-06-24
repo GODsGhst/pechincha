@@ -6,6 +6,18 @@ const compraService = require('../services/compraService');
 const { geocodificarEndereco } = require('../services/geoService');
 const { lerQrCodeDeImagem, base64ParaBuffer } = require('../services/qrCodeService');
 
+async function buscarHtmlDaNfce(url) {
+  const resposta = await axios.get(url, {
+    timeout: 15000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.7'
+    }
+  });
+  return resposta.data;
+}
+
 // POST /api/nfce/processar — body: { imagem_base64 } OU { url_origem } OU { html }
 // Três formas de entrada:
 //  1. imagem_base64: foto do cupom — o back-end decodifica o QR Code (jimp + qrcode-reader)
@@ -35,17 +47,28 @@ async function processar(req, res, next) {
     let conteudoHtml = html;
     if (!conteudoHtml) {
       try {
-        const resposta = await axios.get(url_origem, {
-          timeout: 15000,
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ComparadorPrecos/1.0)' }
-        });
-        conteudoHtml = resposta.data;
+        conteudoHtml = await buscarHtmlDaNfce(url_origem);
       } catch (_err) {
         return res.status(502).json({ error: 'Não foi possível acessar a URL da NFC-e' });
       }
     }
 
-    const dados = parseNfceHtml(conteudoHtml);
+    let dados = parseNfceHtml(conteudoHtml);
+
+    // Se o app mandou HTML ruim/intermediário, mas também mandou a URL, tenta
+    // buscar a página real no backend antes de reportar falha de parsing.
+    if ((!dados.itens || dados.itens.length === 0) && html && url_origem) {
+      try {
+        const htmlRefetch = await buscarHtmlDaNfce(url_origem);
+        const dadosRefetch = parseNfceHtml(htmlRefetch);
+        if (dadosRefetch.itens && dadosRefetch.itens.length > 0) {
+          conteudoHtml = htmlRefetch;
+          dados = dadosRefetch;
+        }
+      } catch (_err) {
+        // Mantém o diagnóstico do HTML original abaixo.
+      }
+    }
 
     if (!dados.itens || dados.itens.length === 0) {
       // Diagnóstico: registra a estrutura recebida para ajustar o parser

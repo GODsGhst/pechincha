@@ -19,13 +19,14 @@
       }
     },
     "android": {
+      "package": "com.consultprice.app",
       "adaptiveIcon": {
         "backgroundColor": "#0E3D2A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "permissions": ["CAMERA"]
+      "permissions": ["CAMERA", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -37,6 +38,12 @@
         "expo-camera",
         {
           "cameraPermission": "O Pechincha usa a câmera para ler o QR Code dos cupons fiscais."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O Pechincha usa sua localização para mostrar lojas próximas."
         }
       ]
     ]

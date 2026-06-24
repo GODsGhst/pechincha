@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, scanFromURLAsync, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
@@ -22,19 +22,11 @@ export default function ScanScreen({ navigation }) {
   const [erro, setErro] = useState(null);
 
   async function processarUrl(url) {
+    const urlLimpa = String(url || '').trim();
     setProcessando(true);
     setErro(null);
     try {
-      // O app faz a requisição à SEFAZ e apenas repassa o HTML ao backend.
-      let html = null;
-      try {
-        const resp = await fetch(url);
-        html = await resp.text();
-      } catch (_e) {
-        html = null; // sem rede até a SEFAZ: o backend tenta pela URL
-      }
-      const corpo = html ? { html, url_origem: url } : { url_origem: url };
-      const r = await api.post('/nfce/processar', corpo);
+      const r = await api.post('/nfce/processar', { url_origem: urlLimpa });
       setResultado(r);
     } catch (e) {
       if (e.status === 409) {
@@ -80,7 +72,20 @@ export default function ScanScreen({ navigation }) {
         setErro('Não consegui ler a imagem escolhida.');
         return;
       }
+
       setLido(true);
+
+      try {
+        const codigos = await scanFromURLAsync(asset.uri, ['qr']);
+        const qr = codigos.find((codigo) => /^https?:\/\//i.test(String(codigo.data || '').trim()));
+        if (qr) {
+          processarUrl(qr.data);
+          return;
+        }
+      } catch (_e) {
+        // Se a leitura local falhar, o backend ainda tenta decodificar a imagem.
+      }
+
       processarImagem(`data:image/jpeg;base64,${asset.base64}`);
     } catch (_e) {
       setErro('Erro ao abrir a galeria.');
@@ -89,12 +94,13 @@ export default function ScanScreen({ navigation }) {
 
   function aoLer({ data }) {
     if (lido || processando) return;
+    const texto = String(data || '').trim();
     setLido(true);
-    if (!/^https?:\/\//i.test(data)) {
+    if (!/^https?:\/\//i.test(texto)) {
       setErro('Este QR Code não é de um cupom fiscal (NFC-e).');
       return;
     }
-    processarUrl(data);
+    processarUrl(texto);
   }
 
   function reiniciar() {

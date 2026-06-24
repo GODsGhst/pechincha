@@ -8,6 +8,7 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get('/menores', comparacaoController.menoresDoUsuario);
+router.post('/cesta', comparacaoController.compararCesta);
 router.get('/compras/:id', comparacaoController.compararCompra);
 
 module.exports = router;

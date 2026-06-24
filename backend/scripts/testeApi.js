@@ -138,7 +138,7 @@ async function main() {
   const compras = await req('GET', '/compras', null, token);
   verificar(compras.status === 200 && compras.json.compras.length === 2, 'usuário tem 2 compras');
 
-  console.log('\n--- Comparação (visões total e unitário) ---');
+  console.log('\n--- Comparação (compra salva e cesta livre) ---');
   const total = await req('GET', `/comparacao/compras/${compraId}?visao=total`, null, token);
   verificar(total.status === 200 && total.json.comparacao.length === 2, 'visão total compara 2 estabelecimentos');
   const maisBarato = total.json.comparacao[0];
@@ -154,6 +154,26 @@ async function main() {
   const menores = await req('GET', '/comparacao/menores', null, token);
   verificar(menores.status === 200 && menores.json.menores_precos.length === 3,
     'sidebar: menores preços dos 3 produtos comprados');
+
+  const buscaFeijao = await req('GET', '/produtos?nome=feijao');
+  const buscaCafe = await req('GET', '/produtos?nome=cafe');
+  const cestaLivre = await req('POST', '/comparacao/cesta', {
+    itens: [
+      { produto_id: arroz.id, quantidade: 1 },
+      { produto_id: buscaFeijao.json.produtos[0].id, quantidade: 2 },
+      { produto_id: buscaCafe.json.produtos[0].id, quantidade: 1 }
+    ]
+  }, token);
+  verificar(cestaLivre.status === 200 && cestaLivre.json.comparacao.length === 2,
+    'cesta livre compara 2 estabelecimentos', JSON.stringify(cestaLivre.json));
+  const cestaMaisBarata = cestaLivre.json.comparacao[0];
+  verificar(cestaMaisBarata.estabelecimento === 'ATACADAO XYZ LTDA' && cestaMaisBarata.total_estimado === 57.89,
+    'cesta livre mais barata no Atacadão (57.89)', JSON.stringify(cestaMaisBarata));
+  verificar(cestaLivre.json.resumo.total_melhores_individuais === 57.89,
+    'cesta livre: soma dos menores individuais = 57.89', JSON.stringify(cestaLivre.json.resumo));
+
+  const cestaInvalida = await req('POST', '/comparacao/cesta', { itens: [{ produto_id: 'id ruim' }] }, token);
+  verificar(cestaInvalida.status === 400, 'cesta com produto_id inválido retorna 400');
 
   console.log('\n--- Mapa ---');
   const mapa = await req('GET', '/estabelecimentos/mapa');

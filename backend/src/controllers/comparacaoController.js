@@ -7,6 +7,21 @@ function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
+function localizacaoDoEstabelecimento(estabelecimento) {
+  if (
+    estabelecimento.localizacao &&
+    estabelecimento.localizacao.lat !== undefined &&
+    estabelecimento.localizacao.lat !== null
+  ) {
+    return { lat: estabelecimento.localizacao.lat, lng: estabelecimento.localizacao.lng };
+  }
+  return null;
+}
+
+function moeda(valor) {
+  return Number(valor.toFixed(2));
+}
+
 // Últimos preços conhecidos de cada produto em cada estabelecimento.
 // Retorna também os dados do estabelecimento para montar a resposta.
 async function ultimosPrecosPorEstabelecimento(produtoIds) {
@@ -70,10 +85,7 @@ async function menoresDoUsuario(req, res, next) {
         data: r.data,
         estabelecimento_id: r.estabelecimento._id,
         estabelecimento: r.estabelecimento.nome,
-        localizacao: r.estabelecimento.localizacao &&
-          r.estabelecimento.localizacao.lat !== undefined && r.estabelecimento.localizacao.lat !== null
-          ? { lat: r.estabelecimento.localizacao.lat, lng: r.estabelecimento.localizacao.lng }
-          : null
+        localizacao: localizacaoDoEstabelecimento(r.estabelecimento)
       }));
 
     return res.json({ menores_precos: resultado });
@@ -195,16 +207,13 @@ async function compararCompra(req, res, next) {
       return {
         estabelecimento_id: estabelecimento._id,
         estabelecimento: estabelecimento.nome,
-        localizacao: estabelecimento.localizacao &&
-          estabelecimento.localizacao.lat !== undefined && estabelecimento.localizacao.lat !== null
-          ? { lat: estabelecimento.localizacao.lat, lng: estabelecimento.localizacao.lng }
-          : null,
-        total_estimado: Number(total.toFixed(2)),
+        localizacao: localizacaoDoEstabelecimento(estabelecimento),
+        total_estimado: moeda(total),
         produtos_cobertos: cobertos,
         total_produtos: compra.itens.length,
         cobertura_completa: coberturaCompleta,
         economia_vs_pago: coberturaCompleta
-          ? Number((compra.valor_total - total).toFixed(2))
+          ? moeda(compra.valor_total - total)
           : null
       };
     });
@@ -227,4 +236,162 @@ async function compararCompra(req, res, next) {
   }
 }
 
-module.exports = { menoresDoUsuario, compararCompra };
+// POST /api/comparacao/cesta
+// Compara uma lista livre de produtos, como o carrinho do app.
+// Body: { itens: [{ produto_id, quantidade }] }
+async function compararCesta(req, res, next) {
+  try {
+    const itensRecebidos = req.body && req.body.itens;
+    if (!Array.isArray(itensRecebidos) || itensRecebidos.length === 0) {
+      return res.status(400).json({ error: 'Envie ao menos um item na cesta' });
+    }
+
+    const quantidadePorProduto = new Map();
+    for (const [indice, item] of itensRecebidos.entries()) {
+      const produtoId = item && (item.produto_id || item.id);
+      if (!produtoId || !idValido(produtoId)) {
+        return res.status(400).json({ error: `Item ${indice + 1}: produto_id inválido` });
+      }
+
+      const quantidade = Number(item.quantidade === undefined ? 1 : item.quantidade);
+      if (!Number.isFinite(quantidade) || quantidade <= 0) {
+        return res.status(400).json({ error: `Item ${indice + 1}: quantidade inválida` });
+      }
+
+      const chave = String(produtoId);
+      quantidadePorProduto.set(chave, (quantidadePorProduto.get(chave) || 0) + quantidade);
+    }
+
+    const produtoIds = [...quantidadePorProduto.keys()].map((id) => new mongoose.Types.ObjectId(id));
+    const produtos = await Produto.find({ _id: { $in: produtoIds } }, 'nome');
+    if (produtos.length !== produtoIds.length) {
+      return res.status(404).json({ error: 'Um ou mais produtos não foram encontrados' });
+    }
+
+    const nomePorId = new Map(produtos.map((p) => [String(p._id), p.nome]));
+    const itens = produtoIds.map((id) => {
+      const chave = String(id);
+      return {
+        produto_id: id,
+        produto: nomePorId.get(chave),
+        quantidade: quantidadePorProduto.get(chave)
+      };
+    });
+
+    const registros = await ultimosPrecosPorEstabelecimento(produtoIds);
+
+    const menorPorProduto = new Map();
+    for (const r of registros) {
+      const chave = String(r._id.produto);
+      const atual = menorPorProduto.get(chave);
+      if (!atual || r.valor < atual.valor) {
+        menorPorProduto.set(chave, r);
+      }
+    }
+
+    let totalMelhoresIndividuais = 0;
+    let produtosComPreco = 0;
+    const melhoresIndividuais = itens.map((item) => {
+      const menor = menorPorProduto.get(String(item.produto_id));
+      if (!menor) {
+        return { ...item, menor_valor: null };
+      }
+
+      produtosComPreco += 1;
+      const subtotal = menor.valor * item.quantidade;
+      totalMelhoresIndividuais += subtotal;
+
+      return {
+        ...item,
+        menor_valor: {
+          valor: menor.valor,
+          subtotal: moeda(subtotal),
+          data: menor.data,
+          estabelecimento_id: menor.estabelecimento._id,
+          estabelecimento: menor.estabelecimento.nome,
+          localizacao: localizacaoDoEstabelecimento(menor.estabelecimento)
+        }
+      };
+    });
+
+    const porEstabelecimento = new Map();
+    for (const r of registros) {
+      const chave = String(r._id.estabelecimento);
+      if (!porEstabelecimento.has(chave)) {
+        porEstabelecimento.set(chave, { estabelecimento: r.estabelecimento, precos: new Map() });
+      }
+      porEstabelecimento.get(chave).precos.set(String(r._id.produto), {
+        valor: r.valor,
+        data: r.data
+      });
+    }
+
+    const comparacao = [...porEstabelecimento.values()].map(({ estabelecimento, precos }) => {
+      let total = 0;
+      let cobertos = 0;
+      const itensComparados = itens.map((item) => {
+        const preco = precos.get(String(item.produto_id));
+        if (!preco) {
+          return {
+            ...item,
+            encontrado: false,
+            valor_unitario: null,
+            subtotal: null,
+            data: null
+          };
+        }
+
+        cobertos += 1;
+        const subtotal = preco.valor * item.quantidade;
+        total += subtotal;
+        return {
+          ...item,
+          encontrado: true,
+          valor_unitario: preco.valor,
+          subtotal: moeda(subtotal),
+          data: preco.data
+        };
+      });
+
+      const coberturaCompleta = cobertos === itens.length;
+      return {
+        estabelecimento_id: estabelecimento._id,
+        estabelecimento: estabelecimento.nome,
+        localizacao: localizacaoDoEstabelecimento(estabelecimento),
+        total_estimado: moeda(total),
+        produtos_cobertos: cobertos,
+        total_produtos: itens.length,
+        cobertura_completa: coberturaCompleta,
+        itens: itensComparados
+      };
+    });
+
+    comparacao.sort((a, b) => {
+      if (a.cobertura_completa !== b.cobertura_completa) {
+        return a.cobertura_completa ? -1 : 1;
+      }
+      if (a.produtos_cobertos !== b.produtos_cobertos) {
+        return b.produtos_cobertos - a.produtos_cobertos;
+      }
+      return a.total_estimado - b.total_estimado;
+    });
+
+    return res.json({
+      cesta: {
+        itens,
+        total_produtos: itens.length
+      },
+      resumo: {
+        total_melhores_individuais: moeda(totalMelhoresIndividuais),
+        produtos_com_preco: produtosComPreco,
+        total_produtos: itens.length
+      },
+      melhores_individuais: melhoresIndividuais,
+      comparacao
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { menoresDoUsuario, compararCompra, compararCesta };

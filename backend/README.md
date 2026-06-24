@@ -15,6 +15,11 @@ npm install
 npm run dev:demo
 #   Login de teste: demo@consultprice.com / senha123
 
+# MODO PERSISTENTE LOCAL — salva as notas em backend/.data/mongodb.
+# Também não precisa instalar MongoDB. Use este para testar salvamento real.
+npm run dev:persist
+#   Login de teste: demo@consultprice.com / senha123
+
 # desenvolvimento real (precisa do MONGODB_URI no .env — Atlas ou local)
 cp .env.example .env
 npm run dev
@@ -32,6 +37,10 @@ npm start
 | `JWT_SECRET` | Chave de assinatura dos tokens | — (obrigatória) |
 | `JWT_EXPIRES_IN` | Expiração do token | `7d` |
 | `CORS_ORIGIN` | Origens permitidas em produção (separadas por vírgula) | todas |
+
+> Para não perder notas ao reiniciar, use `npm run dev:persist` ou configure um
+> `MONGODB_URI` real e rode `npm run dev`. O comando `npm run dev:demo` é
+> descartável por design.
 
 ## Endpoints
 
@@ -109,11 +118,17 @@ coordenadas podem ser definidas manualmente via
 | Método | Rota | Auth |
 |---|---|---|
 | GET | `/api/comparacao/menores` | Sim |
+| POST | `/api/comparacao/cesta` | Sim |
 | GET | `/api/comparacao/compras/:id?visao=total\|unitario` | Sim |
 
 `/menores` retorna os menores preços atuais **apenas dos produtos que o
 usuário já comprou** (com estabelecimento e coordenadas) — é a fonte da
 barra lateral do mapa.
+
+`/cesta` compara uma lista livre, como o carrinho do app. Recebe
+`{ "itens": [{ "produto_id": "...", "quantidade": 1 }] }`, simula o total
+em cada estabelecimento com o último preço conhecido de cada produto e
+retorna o ranking por menor total, cobertura e melhores preços individuais.
 
 `/compras/:id` analisa uma compra do usuário em dois modos, escolhidos
 pelo parâmetro `visao`:

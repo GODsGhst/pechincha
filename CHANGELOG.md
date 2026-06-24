@@ -36,7 +36,13 @@ Nome de exibição do app: **Consult Price** (alinhado ao repo do grupo).
 
 ### Passo a passo (2 terminais)
 
-**Terminal 1 — backend com dados de exemplo (banco em memória):**
+**Terminal 1 — backend persistente local (recomendado para salvar notinhas):**
+```powershell
+cd C:\Users\gh0st\Desktop\TrabalhoProva\backend
+npm run dev:persist
+```
+
+**Alternativa descartável — backend com dados de exemplo (banco em memória):**
 ```powershell
 cd C:\Users\gh0st\Desktop\TrabalhoProva\backend
 npm run dev:demo
@@ -122,6 +128,7 @@ fica no Keychain (iOS) / Keystore (Android) via `expo-secure-store`.
 | GET | `/api/estabelecimentos/mapa` | Não | Lojas com coordenadas + estatísticas |
 | GET | `/api/estabelecimentos/:id/historico` | Não | Série temporal de preços do local |
 | GET | `/api/comparacao/menores` | Sim | Menores preços dos produtos que o usuário comprou |
+| POST | `/api/comparacao/cesta` | Sim | Compara a lista livre do carrinho e ranqueia a cesta por estabelecimento |
 | GET | `/api/comparacao/compras/:id?visao=total\|unitario` | Sim | Compara a compra (cesta total ou item a item) |
 
 ---
@@ -131,11 +138,11 @@ fica no Keychain (iOS) / Keystore (Android) via `expo-secure-store`.
 1. **Login/Cadastro** — gate de acesso; token no SecureStore.
 2. **Início** — header esmeralda, busca, categorias, "melhores preços".
 3. **Escanear** (botão central) — câmera lê QR → busca SEFAZ → backend → tela de recompensa "+1 colaboração".
-4. **Lista** (carrinho) — itens desejados, melhor preço, total.
+4. **Lista** (carrinho) — itens desejados, melhor cesta por estabelecimento, cobertura e total.
 5. **Buscar** — busca de produtos com debounce.
 6. **Produto** — melhor preço + preços por local/data + "adicionar à lista".
 7. **Perfil** — total de colaborações + histórico + sair.
-8. **Área de pesquisa** — localização + raio de distância (mapa ainda ilustrativo).
+8. **Área de pesquisa** — GPS via Expo Location + raio de distância + lojas próximas do backend.
 
 Design guiado por psicologia comportamental: Lei de Fitts/zona do polegar
 (botão de escanear central), Lei de Hick (poucas abas), aversão à perda
@@ -150,6 +157,7 @@ Design guiado por psicologia comportamental: Lei de Fitts/zona do polegar
 - **`adb reverse tcp:3001`** é essencial: sem ele, `localhost:3001` no celular seria o próprio celular, não o PC (onde está o backend).
 - **cmd vs PowerShell:** `$env:VAR="..."` é PowerShell; em cmd é `set VAR=...`. Setar `ANDROID_HOME` ajuda o Expo a achar o SDK.
 - **Banco:** o modo `dev:demo` usa MongoDB **em memória** — os dados **somem ao encerrar**. Para persistir de verdade, configurar `MONGODB_URI` (Atlas ou local) no `backend/.env` e usar `npm run dev`.
+- **Banco local persistente:** use `npm run dev:persist` para salvar as notas em `backend/.data/mongodb` sem depender de MongoDB instalado nem Atlas.
 - O erro de hook `check-sql-files.py` que aparece a cada escrita é **órfão e inofensivo** (some ao reiniciar o Claude Code).
 
 ---
@@ -161,6 +169,9 @@ Design guiado por psicologia comportamental: Lei de Fitts/zona do polegar
 - **App móvel (Expo/React Native):** 8 telas, design verde esmeralda profissional, navegação centrada no escanear, cliente de API, contexto de auth (SecureStore) e de carrinho. Empacota limpo.
 - **Modo demo:** `npm run dev:demo` (MongoDB em memória + seed: 3 lojas em Nova Serrana, 7 produtos com histórico, usuário de teste).
 - **Correção de SDK:** migrado de SDK 56 canary → SDK 54 estável (compatível com Expo Go).
+- **Cesta mais barata:** criado `POST /api/comparacao/cesta` e ligado à tela Lista para comparar o carrinho livre.
+- **Scanner/GPS:** scanner passou a enviar a URL da NFC-e ao backend; galeria tenta ler QR localmente; Área de pesquisa usa `expo-location`.
+- **Persistência local:** criado `npm run dev:persist`, com MongoDB em disco em `backend/.data/mongodb`; diferente de `dev:demo`, não apaga notas ao reiniciar.
 - **Repositório:** criado `GODsGhst/pechincha` (backend + app), separado do antigo (que estava por engano no repo do "Conversor de Moedas").
 
 Commits relevantes (branch `main` de `pechincha`): backend inicial, app móvel, modo demo, fix SDK 54.
@@ -169,12 +180,11 @@ Commits relevantes (branch `main` de `pechincha`): backend inicial, app móvel, 
 
 ## 9. Pendências / próximos passos (em ordem sugerida)
 
-1. **MongoDB Atlas** (persistência real) — precisa do usuário criar conta no site e colar a connection string em `backend/.env` (`MONGODB_URI`). Sem isso, os dados são efêmeros (modo demo).
-2. **Endpoint "cesta mais barata"** — dado o carrinho (lista de produtos), qual estabelecimento sai mais barato no total. Os dados já existem em `HistoricoPreco`. Ligar na tela Lista.
-3. **Mapa real** — `react-native-maps` + `expo-location` na tela Área de pesquisa, usando as coordenadas que o backend já geocodifica (`/estabelecimentos/mapa`).
-4. **Persistência do carrinho** — hoje o `CartContext` é em memória; usar `@react-native-async-storage/async-storage`.
-5. **Importar QR da galeria** no scanner (a tela já prevê o botão).
-6. **Subir o backend/app no repo do grupo** (`CONSULT-PRICE/consult-price-api`) via fork + PR (conta só tem leitura).
+1. **MongoDB Atlas para produção** — o desenvolvimento já pode usar `npm run dev:persist` com dados em disco. Para deploy/uso real fora da máquina, criar conta no Atlas e colar a connection string em `backend/.env` (`MONGODB_URI`).
+2. **Mapa real** — `react-native-maps` + `expo-location` na tela Área de pesquisa, usando as coordenadas que o backend já geocodifica (`/estabelecimentos/mapa`).
+3. **Persistência do carrinho** — hoje o `CartContext` é em memória; usar `@react-native-async-storage/async-storage`.
+4. **Importar QR da galeria** no scanner (a tela já prevê o botão).
+5. **Subir o backend/app no repo do grupo** (`CONSULT-PRICE/consult-price-api`) via fork + PR (conta só tem leitura).
 
 ---
 
