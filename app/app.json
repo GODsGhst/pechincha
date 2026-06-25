@@ -8,6 +8,9 @@
     "scheme": "pechincha",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "extra": {
+      "apiUrl": "https://consult-price-api.onrender.com/api"
+    },
     "splash": {
       "backgroundColor": "#0E3D2A",
       "resizeMode": "contain"
