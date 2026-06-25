@@ -3,20 +3,34 @@
 
 import Constants from 'expo-constants';
 
-// Em desenvolvimento (Expo Go), o app roda no celular e "localhost" apontaria
-// para o próprio celular. Por isso derivamos o IP da máquina de dev a partir
-// do host do Metro. Em produção, troque por sua URL pública (HTTPS).
+const PUBLIC_API_URL = 'https://consult-price-api.onrender.com/api';
+
+function limparUrl(url) {
+  return url ? url.replace(/\/+$/, '') : null;
+}
+
+function extraApiUrl() {
+  return (
+    Constants.expoConfig?.extra?.apiUrl ||
+    Constants.manifest?.extra?.apiUrl ||
+    Constants.manifest2?.extra?.expoClient?.extra?.apiUrl
+  );
+}
+
+// APK/Expo Go não deve depender de localhost. Para testar uma API local,
+// troque expo.extra.apiUrl no app.json para o IP da máquina na mesma rede.
 function resolverBaseUrl() {
-  const extra = Constants.expoConfig?.extra?.apiUrl;
+  const extra = limparUrl(extraApiUrl());
   if (extra) return extra;
 
-  const host = Constants.expoConfig?.hostUri?.split(':')[0];
-  if (host) return `http://${host}:3001/api`;
-
-  return 'http://localhost:3001/api';
+  return PUBLIC_API_URL;
 }
 
 export const API_BASE = resolverBaseUrl();
+
+if (__DEV__) {
+  console.log(`API_BASE=${API_BASE}`);
+}
 
 let authToken = null;
 export function setAuthToken(token) {
@@ -24,14 +38,21 @@ export function setAuthToken(token) {
 }
 
 async function request(metodo, caminho, corpo) {
-  const resposta = await fetch(API_BASE + caminho, {
-    method: metodo,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    },
-    body: corpo ? JSON.stringify(corpo) : undefined,
-  });
+  let resposta;
+  try {
+    resposta = await fetch(API_BASE + caminho, {
+      method: metodo,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+    });
+  } catch (e) {
+    const erro = new Error(`Falha de conexão com a API em ${API_BASE}`);
+    erro.cause = e;
+    throw erro;
+  }
 
   let json = null;
   try {
