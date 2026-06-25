@@ -5,6 +5,7 @@ const produtoSchema = new mongoose.Schema({
   nome_normalizado: { type: String, index: true }, // sem acento/caixa, p/ dedup e busca
   marca:            { type: String, default: null }, // opcional — null = sem marca
   categoria:        { type: String },
+  tipo:             { type: String, default: null }, // ex.: detergente, refrigerante, arroz
   menor_preco:      { type: Number, default: null },
   ultimo_preco: {
     valor:              { type: Number },

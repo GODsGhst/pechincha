@@ -20,7 +20,7 @@ function dataHora(iso) {
   return d.toLocaleDateString('pt-BR') + ' · ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { usuario, logout } = useAuth();
   const [compras, setCompras] = useState([]);
@@ -65,14 +65,14 @@ export default function ProfileScreen() {
         <Text style={styles.vazio}>Você ainda não escaneou nenhum cupom.</Text>
       ) : (
         compras.map((c) => (
-          <View key={c.id} style={styles.row}>
+          <Pressable key={c.id} style={styles.row} onPress={() => navigation.navigate('Receipt', { id: c.id })}>
             <View style={styles.rowIcone}><Ionicons name="receipt-outline" size={18} color={colors.brandDark} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLocal} numberOfLines={1}>{c.estabelecimento || 'Estabelecimento'}</Text>
               <Text style={styles.rowData}>{dataHora(c.data_compra)}</Text>
             </View>
             <Text style={styles.rowValor}>{formatBRL(c.valor_total)}</Text>
-          </View>
+          </Pressable>
         ))
       )}
 

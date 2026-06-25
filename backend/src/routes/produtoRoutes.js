@@ -6,6 +6,8 @@ const router = Router();
 
 router.get('/', produtoController.listar);
 router.get('/menores', produtoController.menores); // antes de /:id para não ser tratado como ID
+router.get('/filtros', produtoController.filtros);
+router.get('/sugestoes', produtoController.sugestoes);
 router.get('/:id', produtoController.detalhar);
 router.post('/', authMiddleware, produtoController.criar);
 router.put('/:id', authMiddleware, produtoController.atualizar);

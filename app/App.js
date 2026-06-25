@@ -25,6 +25,7 @@ import SearchScreen from './src/screens/SearchScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import ProductScreen from './src/screens/ProductScreen';
 import AreaScreen from './src/screens/AreaScreen';
+import ReceiptScreen from './src/screens/ReceiptScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -59,6 +60,7 @@ function Rotas() {
           <Stack.Screen name="Main" component={MainTabs} />
           <Stack.Screen name="Scan" component={ScanScreen} options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="Product" component={ProductScreen} />
+          <Stack.Screen name="Receipt" component={ReceiptScreen} />
           <Stack.Screen name="Area" component={AreaScreen} />
         </>
       ) : (

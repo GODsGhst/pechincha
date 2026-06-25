@@ -20,6 +20,9 @@ function formatar(compra) {
     itens: compra.itens.map((i) => ({
       produto_id: i.produto_id && i.produto_id.nome ? i.produto_id._id : i.produto_id,
       produto: i.produto_id && i.produto_id.nome ? i.produto_id.nome : null,
+      categoria: i.produto_id && i.produto_id.categoria ? i.produto_id.categoria : null,
+      tipo: i.produto_id && i.produto_id.tipo ? i.produto_id.tipo : null,
+      marca: i.produto_id && i.produto_id.marca ? i.produto_id.marca : null,
       nome_original: i.nome_original || null,
       quantidade: i.quantidade,
       valor_unitario: i.valor_unitario,
@@ -34,7 +37,7 @@ async function listar(req, res, next) {
     const compras = await Compra.find({ usuario_id: req.usuario.id })
       .sort({ data_compra: -1 })
       .populate('estabelecimento_id', 'nome')
-      .populate('itens.produto_id', 'nome');
+      .populate('itens.produto_id', 'nome categoria tipo marca');
 
     return res.json({ compras: compras.map(formatar) });
   } catch (err) {
@@ -51,7 +54,7 @@ async function detalhar(req, res, next) {
 
     const compra = await Compra.findOne({ _id: req.params.id, usuario_id: req.usuario.id })
       .populate('estabelecimento_id', 'nome')
-      .populate('itens.produto_id', 'nome');
+      .populate('itens.produto_id', 'nome categoria tipo marca');
 
     if (!compra) {
       return res.status(404).json({ error: 'Compra não encontrada' });
@@ -196,7 +199,7 @@ async function atualizar(req, res, next) {
 
     const populada = await Compra.findById(compra._id)
       .populate('estabelecimento_id', 'nome')
-      .populate('itens.produto_id', 'nome');
+      .populate('itens.produto_id', 'nome categoria tipo marca');
 
     return res.json(formatar(populada));
   } catch (err) {

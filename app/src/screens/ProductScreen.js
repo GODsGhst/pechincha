@@ -44,6 +44,13 @@ export default function ProductScreen({ route, navigation }) {
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
           <View style={styles.imagem}><Ionicons name="pricetag" size={48} color={colors.inkMuted} /></View>
           <Text style={styles.nome}>{produto.nome}</Text>
+          <View style={styles.metaLinha}>
+            {[produto.categoria, produto.tipo, produto.marca].filter(Boolean).map((item) => (
+              <View key={item} style={styles.metaChip}>
+                <Text style={styles.metaTexto} numberOfLines={1}>{item}</Text>
+              </View>
+            ))}
+          </View>
 
           <View style={styles.bannerPreco}>
             <Text style={styles.bannerLabel}>melhor preço encontrado</Text>
@@ -97,6 +104,9 @@ const styles = StyleSheet.create({
   headerTitulo: { fontFamily: fonts.semibold, fontSize: 16, color: colors.brandDark },
   imagem: { height: 150, borderRadius: radius.lg, backgroundColor: '#F1F0EA', alignItems: 'center', justifyContent: 'center' },
   nome: { fontFamily: fonts.display, fontSize: 18, color: colors.ink, marginTop: 14 },
+  metaLinha: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  metaChip: { borderRadius: radius.pill, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, paddingHorizontal: 10, paddingVertical: 5, maxWidth: '100%' },
+  metaTexto: { fontFamily: fonts.medium, fontSize: 12, color: colors.brandDark },
   bannerPreco: { backgroundColor: colors.brandDark, borderRadius: radius.lg, padding: 16, marginTop: 12 },
   bannerLabel: { fontFamily: fonts.body, fontSize: 11, color: '#9FD9BC', textTransform: 'uppercase', letterSpacing: 0.5 },
   bannerValor: { fontFamily: fonts.monoMedium, fontSize: 28, color: colors.white, marginTop: 2 },

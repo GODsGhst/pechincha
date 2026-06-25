@@ -69,7 +69,7 @@ export default function HomeScreen({ navigation }) {
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 18 }} contentContainerStyle={{ gap: 12 }}>
           {CATEGORIAS.map((c) => (
-            <Pressable key={c.nome} style={styles.categoria} onPress={() => navigation.navigate('Buscar')}>
+            <Pressable key={c.nome} style={styles.categoria} onPress={() => navigation.navigate('Buscar', { categoria: c.nome })}>
               <View style={styles.categoriaIcone}><Ionicons name={c.icone} size={22} color={colors.brandDark} /></View>
               <Text style={styles.categoriaNome}>{c.nome}</Text>
             </Pressable>

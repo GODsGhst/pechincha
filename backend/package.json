@@ -10,6 +10,8 @@
     "dev:persist": "node scripts/devPersist.js",
     "test:api": "node scripts/testeApi.js",
     "test:norm": "node scripts/testeNormalizador.js",
+    "organize:products": "node scripts/organizarProdutos.js",
+    "organize:products:apply": "node scripts/organizarProdutos.js --apply",
     "seed": "node scripts/seedRemote.js"
   },
   "engines": {
