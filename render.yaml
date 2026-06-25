@@ -1,6 +1,7 @@
 # Blueprint do Render (deploy grátis do backend).
 # No Render: New > Blueprint > conecte este repo. Ele lê este arquivo.
-# Depois, em Environment, cole o MONGODB_URI do MongoDB Atlas.
+# O MONGODB_URI do MongoDB Atlas fica configurado manualmente no painel
+# do Render para evitar sincronizar segredo pelo Blueprint.
 services:
   - type: web
     name: consult-price-api
@@ -11,8 +12,6 @@ services:
     startCommand: npm start
     healthCheckPath: /
     envVars:
-      - key: MONGODB_URI
-        sync: false # cole a connection string do Atlas no painel do Render
       - key: JWT_SECRET
         generateValue: true # o Render gera um segredo aleatório
       - key: JWT_EXPIRES_IN

@@ -17,6 +17,7 @@ Thumbs.db
 
 # Arquivos baixados / temporários
 *.zip
+*.apk
 consult-price-api-main/
 
 # Expo / React Native (app)

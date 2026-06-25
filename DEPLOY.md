@@ -24,14 +24,18 @@ Tudo no plano gratuito. O backend já está pronto (lê `PORT`, `MONGODB_URI` e
 
 1. Crie a conta: https://render.com (entre com o GitHub).
 2. **New → Blueprint** → conecte o repositório **GODsGhst/pechincha**.
-   O Render lê o `render.yaml` e cria o serviço `consult-price-api`.
-3. Em **Environment**, defina:
+   O Render lê o `render.yaml` e cria/atualiza o serviço `consult-price-api`.
+3. No serviço `consult-price-api`, abra **Environment** e defina manualmente:
    - `MONGODB_URI` = a connection string do Atlas (passo 1).
    - (`JWT_SECRET` o Render gera sozinho.)
-4. **Create / Deploy**. Em alguns minutos sai uma URL pública, ex.:
+4. **Manual Deploy / Deploy latest commit**. Em alguns minutos sai uma URL pública, ex.:
    `https://consult-price-api.onrender.com`
 5. Teste no navegador: abrir essa URL deve mostrar
    `{"message":"API do Comparador de Preços por Cupons Fiscais",...}`.
+
+> O `MONGODB_URI` não fica no `render.yaml`: ele é segredo e deve permanecer
+> no painel do Render. Se o Blueprint aparecer como **Failed sync**, confirme
+> que o serviço já tem essa variável em **Environment** e rode o sync/deploy de novo.
 
 > O plano free hiberna após ~15 min sem uso; a 1ª chamada depois disso demora
 > ~30s (cold start). Normal para testes.
