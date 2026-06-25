@@ -20,6 +20,7 @@ function montarFiltros(query) {
   if (query.categoria) filtros.categoria = String(query.categoria).trim();
   if (query.tipo) filtros.tipo = String(query.tipo).trim();
   if (query.marca) filtros.marca = String(query.marca).trim();
+  if (query.quantidade) filtros.quantidade = String(query.quantidade).trim();
   return filtros;
 }
 
@@ -28,6 +29,7 @@ function montarQueryProduto(filtros = {}) {
   if (filtros.categoria) query.categoria = regexExato(filtros.categoria);
   if (filtros.tipo) query.tipo = regexExato(filtros.tipo);
   if (filtros.marca) query.marca = regexExato(filtros.marca);
+  if (filtros.quantidade) query.quantidade = regexExato(filtros.quantidade);
   return query;
 }
 
@@ -38,6 +40,7 @@ function formatarProduto(p) {
     categoria: p.categoria || null,
     tipo: p.tipo || null,
     marca: p.marca || null,
+    quantidade: p.quantidade || null,
     menor_preco: p.menor_preco,
     ultimo_preco: p.ultimo_preco && p.ultimo_preco.valor !== undefined && p.ultimo_preco.valor !== null
       ? {
@@ -49,7 +52,7 @@ function formatarProduto(p) {
   };
 }
 
-// GET /api/produtos?nome=arroz&categoria=Alimentos&tipo=Arroz&marca=Tio%20João
+// GET /api/produtos?nome=arroz&categoria=Alimentos&tipo=Arroz&marca=Tio%20João&quantidade=5kg
 async function listar(req, res, next) {
   try {
     const filtros = montarFiltros(req.query);
@@ -114,6 +117,7 @@ async function menores(req, res, next) {
     if (filtros.categoria) matchProduto['produto.categoria'] = regexExato(filtros.categoria);
     if (filtros.tipo) matchProduto['produto.tipo'] = regexExato(filtros.tipo);
     if (filtros.marca) matchProduto['produto.marca'] = regexExato(filtros.marca);
+    if (filtros.quantidade) matchProduto['produto.quantidade'] = regexExato(filtros.quantidade);
     if (Object.keys(matchProduto).length > 0) pipeline.push({ $match: matchProduto });
 
     pipeline.push(
@@ -138,6 +142,7 @@ async function menores(req, res, next) {
         categoria: r.produto.categoria || null,
         tipo: r.produto.tipo || null,
         marca: r.produto.marca || null,
+        quantidade: r.produto.quantidade || null,
         valor: r.valor,
         data: r.data,
         estabelecimento_id: r.estabelecimento ? r.estabelecimento._id : null,
@@ -153,22 +158,26 @@ async function menores(req, res, next) {
   }
 }
 
-// GET /api/produtos/filtros?categoria=Limpeza&tipo=Detergente
+// GET /api/produtos/filtros?categoria=Limpeza&tipo=Detergente&marca=Ypê
 async function filtros(req, res, next) {
   try {
     const filtrosAtuais = montarFiltros(req.query);
     const base = montarQueryProduto(filtrosAtuais);
+    const baseSemQuantidade = { ...base };
+    delete baseSemQuantidade.quantidade;
 
-    const [categorias, tipos, marcas] = await Promise.all([
+    const [categorias, tipos, marcas, quantidades] = await Promise.all([
       Produto.distinct('categoria', { categoria: { $nin: [null, ''] } }),
       Produto.distinct('tipo', { ...base, tipo: { $nin: [null, ''] } }),
-      Produto.distinct('marca', { ...base, marca: { $nin: [null, ''] } })
+      Produto.distinct('marca', { ...base, marca: { $nin: [null, ''] } }),
+      Produto.distinct('quantidade', { ...baseSemQuantidade, quantidade: { $nin: [null, ''] } })
     ]);
 
     return res.json({
       categorias: categorias.filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR')),
       tipos: tipos.filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR')),
-      marcas: marcas.filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      marcas: marcas.filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      quantidades: quantidades.filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }))
     });
   } catch (err) {
     return next(err);
@@ -195,7 +204,8 @@ async function sugestoes(req, res, next) {
         nome: p.nome,
         categoria: p.categoria || null,
         tipo: p.tipo || null,
-        marca: p.marca || null
+        marca: p.marca || null,
+        quantidade: p.quantidade || null
       }))
     });
   } catch (err) {
@@ -225,6 +235,7 @@ async function detalhar(req, res, next) {
       categoria: produto.categoria || null,
       tipo: produto.tipo || null,
       marca: produto.marca || null,
+      quantidade: produto.quantidade || null,
       menor_preco: produto.menor_preco,
       ultimo_preco: produto.ultimo_preco ? produto.ultimo_preco.valor : null,
       historico: historico.map((h) => ({
@@ -253,7 +264,9 @@ async function criar(req, res, next) {
       nome_normalizado: productNormalizer.normalizarTexto(nomeExibicao),
       categoria: analise.categoria,
       tipo: analise.tipo,
-      marca: analise.marca
+      marca: analise.marca,
+      quantidade: analise.quantidade,
+      quantidade_normalizada: analise.quantidade_normalizada
     });
     return res.status(201).json(formatarProduto(produto));
   } catch (err) {
@@ -281,6 +294,8 @@ async function atualizar(req, res, next) {
       if (categoria === undefined) atualizacao.categoria = analise.categoria;
       if (tipo === undefined) atualizacao.tipo = analise.tipo;
       if (marca === undefined) atualizacao.marca = analise.marca;
+      atualizacao.quantidade = analise.quantidade;
+      atualizacao.quantidade_normalizada = analise.quantidade_normalizada;
     }
     if (categoria !== undefined) atualizacao.categoria = categoria;
     if (tipo !== undefined) atualizacao.tipo = tipo;

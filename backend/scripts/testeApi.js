@@ -132,14 +132,15 @@ async function main() {
   verificar(arroz.ultimo_preco && arroz.ultimo_preco.valor === 22.9, 'ultimo_preco do arroz é 22.90 (compra mais recente)');
   verificar(arroz.categoria === 'Alimentos' && arroz.tipo === 'Arroz' && arroz.marca === 'Tio João',
     'produto retorna categoria/tipo/marca');
+  verificar(arroz.quantidade === '5kg', 'produto retorna quantidade/tamanho');
 
-  const filtroArroz = await req('GET', '/produtos?categoria=Alimentos&tipo=Arroz');
+  const filtroArroz = await req('GET', '/produtos?categoria=Alimentos&tipo=Arroz&quantidade=5kg');
   verificar(filtroArroz.status === 200 && filtroArroz.json.produtos.length === 1,
-    'filtro por categoria/tipo retorna arroz');
+    'filtro por categoria/tipo/quantidade retorna arroz');
 
   const filtrosProdutos = await req('GET', '/produtos/filtros?categoria=Alimentos');
-  verificar(filtrosProdutos.status === 200 && filtrosProdutos.json.tipos.includes('Arroz'),
-    'endpoint de filtros retorna tipos');
+  verificar(filtrosProdutos.status === 200 && filtrosProdutos.json.tipos.includes('Arroz') && filtrosProdutos.json.quantidades.includes('5kg'),
+    'endpoint de filtros retorna tipos e quantidades');
 
   const detalhe = await req('GET', `/produtos/${arroz.id}`);
   verificar(detalhe.status === 200 && detalhe.json.historico.length === 2, 'histórico do arroz tem 2 registros');
@@ -152,6 +153,8 @@ async function main() {
     'detalhe da compra abre a notinha com 3 itens');
   verificar(compraDetalhe.json.itens[0].quantidade === 1 && compraDetalhe.json.itens[0].valor_unitario === 24.5,
     'item da notinha preserva quantidade e valor unitário');
+  verificar(compraDetalhe.json.itens[0].quantidade_produto === '5kg',
+    'item da notinha mostra quantidade/tamanho do produto');
 
   console.log('\n--- Comparação (compra salva e cesta livre) ---');
   const total = await req('GET', `/comparacao/compras/${compraId}?visao=total`, null, token);

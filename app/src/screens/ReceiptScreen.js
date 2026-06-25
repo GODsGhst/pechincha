@@ -19,7 +19,7 @@ function formatarQtd(valor) {
 }
 
 function metaTexto(item) {
-  return [item.categoria, item.tipo, item.marca].filter(Boolean).join(' · ');
+  return [item.categoria, item.tipo, item.marca, item.quantidade_produto].filter(Boolean).join(' · ');
 }
 
 export default function ReceiptScreen({ route, navigation }) {

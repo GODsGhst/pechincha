@@ -45,7 +45,7 @@ export default function ProductScreen({ route, navigation }) {
           <View style={styles.imagem}><Ionicons name="pricetag" size={48} color={colors.inkMuted} /></View>
           <Text style={styles.nome}>{produto.nome}</Text>
           <View style={styles.metaLinha}>
-            {[produto.categoria, produto.tipo, produto.marca].filter(Boolean).map((item) => (
+            {[produto.categoria, produto.tipo, produto.marca, produto.quantidade].filter(Boolean).map((item) => (
               <View key={item} style={styles.metaChip}>
                 <Text style={styles.metaTexto} numberOfLines={1}>{item}</Text>
               </View>

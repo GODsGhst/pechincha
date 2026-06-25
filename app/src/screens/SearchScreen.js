@@ -6,17 +6,18 @@ import { api } from '../api/client';
 import { colors, fonts, radius } from '../theme';
 import { formatBRL } from '../utils/format';
 
-function montarQuery({ termo, categoria, tipo, marca }) {
+function montarQuery({ termo, categoria, tipo, marca, quantidade }) {
   const params = [];
   if (termo?.trim()) params.push(`nome=${encodeURIComponent(termo.trim())}`);
   if (categoria) params.push(`categoria=${encodeURIComponent(categoria)}`);
   if (tipo) params.push(`tipo=${encodeURIComponent(tipo)}`);
   if (marca) params.push(`marca=${encodeURIComponent(marca)}`);
+  if (quantidade) params.push(`quantidade=${encodeURIComponent(quantidade)}`);
   return params.length ? `?${params.join('&')}` : '';
 }
 
 function metaTexto(item) {
-  return [item.categoria, item.tipo, item.marca].filter(Boolean).join(' · ');
+  return [item.categoria, item.tipo, item.marca, item.quantidade].filter(Boolean).join(' · ');
 }
 
 function Chip({ label, ativo, onPress }) {
@@ -33,7 +34,8 @@ export default function SearchScreen({ route, navigation }) {
   const [categoria, setCategoria] = useState(route.params?.categoria || null);
   const [tipo, setTipo] = useState(null);
   const [marca, setMarca] = useState(null);
-  const [filtros, setFiltros] = useState({ categorias: [], tipos: [], marcas: [] });
+  const [quantidade, setQuantidade] = useState(null);
+  const [filtros, setFiltros] = useState({ categorias: [], tipos: [], marcas: [], quantidades: [] });
   const [resultados, setResultados] = useState([]);
   const [carregando, setCarregando] = useState(false);
   const [buscou, setBuscou] = useState(false);
@@ -44,21 +46,22 @@ export default function SearchScreen({ route, navigation }) {
       setCategoria(route.params.categoria);
       setTipo(null);
       setMarca(null);
+      setQuantidade(null);
       setBuscou(true);
     }
   }, [route.params?.categoria]);
 
   const carregarFiltros = useCallback(async () => {
     try {
-      const query = montarQuery({ categoria, tipo });
+      const query = montarQuery({ categoria, tipo, marca });
       setFiltros(await api.get(`/produtos/filtros${query}`));
     } catch (_e) {
-      setFiltros({ categorias: [], tipos: [], marcas: [] });
+      setFiltros({ categorias: [], tipos: [], marcas: [], quantidades: [] });
     }
-  }, [categoria, tipo]);
+  }, [categoria, tipo, marca]);
 
   const buscar = useCallback(async () => {
-    if (!termo.trim() && !categoria && !tipo && !marca) {
+    if (!termo.trim() && !categoria && !tipo && !marca && !quantidade) {
       setResultados([]);
       setBuscou(false);
       return;
@@ -66,7 +69,7 @@ export default function SearchScreen({ route, navigation }) {
 
     setCarregando(true);
     try {
-      const query = montarQuery({ termo, categoria, tipo, marca });
+      const query = montarQuery({ termo, categoria, tipo, marca, quantidade });
       const { produtos } = await api.get(`/produtos${query}`);
       setResultados(produtos || []);
     } catch (_e) {
@@ -75,7 +78,7 @@ export default function SearchScreen({ route, navigation }) {
       setCarregando(false);
       setBuscou(true);
     }
-  }, [termo, categoria, tipo, marca]);
+  }, [termo, categoria, tipo, marca, quantidade]);
 
   useEffect(() => {
     carregarFiltros();
@@ -93,15 +96,22 @@ export default function SearchScreen({ route, navigation }) {
     setCategoria((atual) => (atual === valor ? null : valor));
     setTipo(null);
     setMarca(null);
+    setQuantidade(null);
   }
 
   function selecionarTipo(valor) {
     setTipo((atual) => (atual === valor ? null : valor));
     setMarca(null);
+    setQuantidade(null);
   }
 
   function selecionarMarca(valor) {
     setMarca((atual) => (atual === valor ? null : valor));
+    setQuantidade(null);
+  }
+
+  function selecionarQuantidade(valor) {
+    setQuantidade((atual) => (atual === valor ? null : valor));
   }
 
   function limparTudo() {
@@ -109,9 +119,10 @@ export default function SearchScreen({ route, navigation }) {
     setCategoria(null);
     setTipo(null);
     setMarca(null);
+    setQuantidade(null);
   }
 
-  const temFiltro = Boolean(termo || categoria || tipo || marca);
+  const temFiltro = Boolean(termo || categoria || tipo || marca || quantidade);
   const sugestoes = termo.trim().length >= 2 ? resultados.slice(0, 6) : [];
 
   return (
@@ -163,6 +174,14 @@ export default function SearchScreen({ route, navigation }) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsSecundarios}>
           {filtros.marcas.map((item) => (
             <Chip key={`marca-${item}`} label={item} ativo={marca === item} onPress={() => selecionarMarca(item)} />
+          ))}
+        </ScrollView>
+      )}
+
+      {(categoria || tipo || marca || filtros.quantidades.length > 0) && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsSecundarios}>
+          {filtros.quantidades.map((item) => (
+            <Chip key={`qtd-${item}`} label={item} ativo={quantidade === item} onPress={() => selecionarQuantidade(item)} />
           ))}
         </ScrollView>
       )}

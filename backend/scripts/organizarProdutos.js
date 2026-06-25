@@ -39,7 +39,9 @@ async function atualizarProduto(produto, analise) {
     nome_normalizado: normalizarTexto(nomeExibicao),
     categoria: produto.categoria || analise.categoria,
     tipo: produto.tipo || analise.tipo,
-    marca: produto.marca || analise.marca
+    marca: produto.marca || analise.marca,
+    quantidade: produto.quantidade || analise.quantidade,
+    quantidade_normalizada: produto.quantidade_normalizada || analise.quantidade_normalizada
   };
 
   const mudou = Object.entries(atualizacao).some(([chave, valor]) => {

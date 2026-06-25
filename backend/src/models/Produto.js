@@ -6,6 +6,8 @@ const produtoSchema = new mongoose.Schema({
   marca:            { type: String, default: null }, // opcional — null = sem marca
   categoria:        { type: String },
   tipo:             { type: String, default: null }, // ex.: detergente, refrigerante, arroz
+  quantidade:       { type: String, default: null }, // ex.: 2L, 500ml, 5kg
+  quantidade_normalizada: { type: String, index: true, default: null }, // ex.: 2000ml, 500ml, 5000g
   menor_preco:      { type: Number, default: null },
   ultimo_preco: {
     valor:              { type: Number },

@@ -29,6 +29,7 @@ function check(cond, nome) {
   check(b.produto.nome === 'Arroz Tio João 5kg', 'nome de exibição fica padronizado');
   check(b.produto.categoria === 'Alimentos' && b.produto.tipo === 'Arroz' && b.produto.marca === 'Tio João',
     'arroz recebe categoria/tipo/marca');
+  check(b.produto.quantidade === '5kg', 'arroz recebe quantidade/tamanho');
 
   const c = await encontrarOuCriarProduto('ARROZ 1KG');
   check(c.novo === true, 'tamanho diferente -> produto NOVO (não junta indevidamente)');
@@ -45,6 +46,7 @@ function check(cond, nome) {
   check(coca1.produto.nome === 'Refrigerante Coca-Cola 2L', 'Coca-Cola fica com nome organizado');
   check(coca1.produto.categoria === 'Bebidas' && coca1.produto.tipo === 'Refrigerante' && coca1.produto.marca === 'Coca-Cola',
     'Coca-Cola recebe categoria/tipo/marca');
+  check(coca1.produto.quantidade === '2L', 'Coca-Cola recebe quantidade/tamanho');
 
   const det1 = await encontrarOuCriarProduto('DETERGENTE YPE GIRASSOL 500ML');
   const det2 = await encontrarOuCriarProduto('DETERG YPE GIRASSOL 500 ML');
@@ -53,6 +55,7 @@ function check(cond, nome) {
   check(det1.produto.nome === 'Detergente Ypê Girassol 500ml', 'detergente fica com nome organizado');
   check(det1.produto.categoria === 'Limpeza' && det1.produto.tipo === 'Detergente' && det1.produto.marca === 'Ypê',
     'detergente recebe categoria/tipo/marca');
+  check(det1.produto.quantidade === '500ml', 'detergente recebe quantidade/tamanho');
 
   const ama1 = await encontrarOuCriarProduto('AMA');
   const ama2 = await encontrarOuCriarProduto('AMACIANTE AMA 2 LT');
@@ -77,6 +80,10 @@ function check(cond, nome) {
   const buscaBebida = await buscarProdutos('coca 2l', { categoria: 'Bebidas', tipo: 'Refrigerante' });
   check(buscaBebida.length === 1 && String(buscaBebida[0]._id) === String(coca1.produto._id),
     'busca aceita filtro por categoria/tipo');
+
+  const buscaQuantidade = await buscarProdutos('coca', { categoria: 'Bebidas', quantidade: '2L' });
+  check(buscaQuantidade.length === 1 && String(buscaQuantidade[0]._id) === String(coca1.produto._id),
+    'busca aceita filtro por quantidade');
 
   console.log(`\nResultado: ${ok} OK, ${falhou} falhas`);
   await mongoose.disconnect();

@@ -195,6 +195,14 @@ function formatarQuantidade(quantidade) {
   return `${valor}un`;
 }
 
+function formatarQuantidades(quantidades = []) {
+  return quantidades.map(formatarQuantidade).join(' + ') || null;
+}
+
+function normalizarQuantidades(quantidades = []) {
+  return quantidades.join('|') || null;
+}
+
 function tituloToken(token) {
   const especiais = {
     acucar: 'Açúcar',
@@ -301,6 +309,8 @@ function analisarProduto(nomeBruto, sobrescritas = {}) {
   const categoria = sobrescritas.categoria || (tipoInfo ? tipoInfo.categoria : detectarCategoria(comparavel));
   const quantidades = extrairQuantidades(comparavel);
   const extras = montarExtras(tokens, marcaInfo, tipoInfo);
+  const quantidade = formatarQuantidades(quantidades);
+  const quantidade_normalizada = normalizarQuantidades(quantidades);
 
   const partes = [categoria, tipo, marca, ...quantidades, ...extras].filter(Boolean);
   const chave = partes.join('|').toLowerCase();
@@ -319,6 +329,8 @@ function analisarProduto(nomeBruto, sobrescritas = {}) {
     categoria,
     tipo,
     quantidades,
+    quantidade,
+    quantidade_normalizada,
     extras,
     chave: chave || normalizado,
     confiavel
@@ -365,6 +377,10 @@ async function enriquecerProduto(produto, analise, nomeNovo) {
   if (!produto.categoria && analise.categoria) set.categoria = analise.categoria;
   if (!produto.marca && analise.marca) set.marca = analise.marca;
   if (!produto.tipo && analise.tipo) set.tipo = analise.tipo;
+  if (analise.quantidade && produto.quantidade !== analise.quantidade) set.quantidade = analise.quantidade;
+  if (analise.quantidade_normalizada && produto.quantidade_normalizada !== analise.quantidade_normalizada) {
+    set.quantidade_normalizada = analise.quantidade_normalizada;
+  }
   if (deveTrocarNome(produto, nomeNovo, analise)) set.nome = nomeNovo;
 
   if (Object.keys(set).length === 0) return produto;
@@ -410,7 +426,9 @@ async function encontrarOuCriarProduto(nomeBruto) {
     nome_normalizado: nomeNormalizado,
     categoria: analise.categoria,
     marca: analise.marca,
-    tipo: analise.tipo
+    tipo: analise.tipo,
+    quantidade: analise.quantidade,
+    quantidade_normalizada: analise.quantidade_normalizada
   });
   return { produto: criado, novo: true };
 }
@@ -423,6 +441,7 @@ async function buscarProdutos(descricao, filtros = {}) {
   if (filtros.categoria) query.categoria = new RegExp(`^${escapeRegex(filtros.categoria)}$`, 'i');
   if (filtros.tipo) query.tipo = new RegExp(`^${escapeRegex(filtros.tipo)}$`, 'i');
   if (filtros.marca) query.marca = new RegExp(`^${escapeRegex(filtros.marca)}$`, 'i');
+  if (filtros.quantidade) query.quantidade = new RegExp(`^${escapeRegex(filtros.quantidade)}$`, 'i');
 
   const produtos = await Produto.find(query);
   if (produtos.length === 0) return [];
@@ -431,7 +450,7 @@ async function buscarProdutos(descricao, filtros = {}) {
     const analise = analiseDoProdutoSalvo(p);
     return {
       ref: p,
-      texto: [analise.chave, analise.normalizado, p.marca, p.tipo, p.categoria].filter(Boolean).join(' ')
+      texto: [analise.chave, analise.normalizado, p.marca, p.tipo, p.categoria, p.quantidade].filter(Boolean).join(' ')
     };
   });
 
@@ -455,6 +474,8 @@ module.exports = {
   tokenizar,
   analisarProduto,
   formatarNomeProduto,
+  formatarQuantidades,
+  normalizarQuantidades,
   LIMIAR_DEDUP,
   LIMIAR_BUSCA
 };
