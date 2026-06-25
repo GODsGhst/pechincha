@@ -75,6 +75,7 @@ async function main() {
 
   const app = require('../src/app');
   const connectDB = require('../src/config/database');
+  const Usuario = require('../src/models/Usuario');
   await connectDB();
 
   const PORTA = 3210;
@@ -98,6 +99,10 @@ async function main() {
   console.log('\n--- Autenticação ---');
   const reg = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: 'senha123' });
   verificar(reg.status === 201 && !!reg.json.token, 'register retorna 201 + token');
+  verificar(reg.json.usuario.papel === 'usuario', 'register retorna papel usuario');
+
+  const usuarioSemSenha = await Usuario.findOne({ email: 'joao@email.com' });
+  verificar(usuarioSemSenha && !usuarioSemSenha.senha, 'senha não é selecionada por padrão no Mongo');
 
   const regDup = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: 'senha123' });
   verificar(regDup.status === 409, 'register duplicado retorna 409');
@@ -108,6 +113,15 @@ async function main() {
 
   const loginErrado = await req('POST', '/auth/login', { email: 'joao@email.com', senha: 'errada' });
   verificar(loginErrado.status === 401, 'login com senha errada retorna 401');
+
+  const produtoDireto = await req('POST', '/produtos', { nome: 'PRODUTO DIRETO 1UN' }, token);
+  verificar(produtoDireto.status === 403, 'usuário comum não cria produto direto');
+
+  const estabelecimentoDireto = await req('POST', '/estabelecimentos', {
+    nome: 'LOJA DIRETA',
+    cnpj: '00.000.000/0001-00'
+  }, token);
+  verificar(estabelecimentoDireto.status === 403, 'usuário comum não cria estabelecimento direto');
 
   console.log('\n--- Processamento de NFC-e ---');
   const semToken = await req('POST', '/nfce/processar', { html: HTML_SUPERMERCADO_ABC });

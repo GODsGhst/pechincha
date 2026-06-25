@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const produtoController = require('../controllers/produtoController');
 const authMiddleware = require('../middleware/authMiddleware');
+const adminMiddleware = require('../middleware/adminMiddleware');
 
 const router = Router();
 
@@ -9,8 +10,8 @@ router.get('/menores', produtoController.menores); // antes de /:id para não se
 router.get('/filtros', produtoController.filtros);
 router.get('/sugestoes', produtoController.sugestoes);
 router.get('/:id', produtoController.detalhar);
-router.post('/', authMiddleware, produtoController.criar);
-router.put('/:id', authMiddleware, produtoController.atualizar);
-router.delete('/:id', authMiddleware, produtoController.remover);
+router.post('/', authMiddleware, adminMiddleware, produtoController.criar);
+router.put('/:id', authMiddleware, adminMiddleware, produtoController.atualizar);
+router.delete('/:id', authMiddleware, adminMiddleware, produtoController.remover);
 
 module.exports = router;

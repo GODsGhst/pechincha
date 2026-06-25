@@ -13,6 +13,13 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
+
 // Em produção, restrinja a origens conhecidas via CORS_ORIGIN (separadas por vírgula)
 const corsOptions = process.env.CORS_ORIGIN
   ? { origin: process.env.CORS_ORIGIN.split(',').map((o) => o.trim()) }
