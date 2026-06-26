@@ -5,6 +5,8 @@ const Estabelecimento = require('../models/Estabelecimento');
 const Compra = require('../models/Compra');
 const HistoricoPreco = require('../models/HistoricoPreco');
 const ImportacaoNfce = require('../models/ImportacaoNfce');
+const AdminAuditLog = require('../models/AdminAuditLog');
+const { registrarAdminAudit } = require('../services/adminAuditService');
 
 function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -120,8 +122,48 @@ async function atualizarPapelUsuario(req, res, next) {
 
     usuario.papel = papel;
     await usuario.save();
+    await registrarAdminAudit(req, {
+      acao: 'usuario.papel_atualizar',
+      alvo_tipo: 'usuario',
+      alvo_id: usuario._id,
+      resumo: `Papel de ${usuario.email} atualizado para ${papel}`,
+      dados: { email: usuario.email, papel }
+    });
 
     return res.json(formatarUsuario(usuario));
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function auditoria(req, res, next) {
+  try {
+    const limite = Math.min(Math.max(Number(req.query.limite) || 50, 1), 100);
+    const logs = await AdminAuditLog.find()
+      .sort({ criado_em: -1 })
+      .limit(limite)
+      .populate('usuario_id', 'nome email')
+      .lean();
+
+    return res.json({
+      logs: logs.map((log) => ({
+        id: log._id,
+        acao: log.acao,
+        alvo_tipo: log.alvo_tipo,
+        alvo_id: log.alvo_id,
+        resumo: log.resumo,
+        dados: log.dados || null,
+        ip: log.ip || null,
+        criado_em: log.criado_em,
+        usuario: log.usuario_id
+          ? {
+              id: log.usuario_id._id,
+              nome: log.usuario_id.nome,
+              email: log.usuario_id.email
+            }
+          : null
+      }))
+    });
   } catch (err) {
     return next(err);
   }
@@ -130,5 +172,6 @@ async function atualizarPapelUsuario(req, res, next) {
 module.exports = {
   resumo,
   listarUsuarios,
-  atualizarPapelUsuario
+  atualizarPapelUsuario,
+  auditoria
 };

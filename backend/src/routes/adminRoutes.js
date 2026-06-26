@@ -8,6 +8,7 @@ const router = Router();
 router.use(authMiddleware, adminMiddleware);
 
 router.get('/resumo', adminController.resumo);
+router.get('/auditoria', adminController.auditoria);
 router.get('/usuarios', adminController.listarUsuarios);
 router.put('/usuarios/:id/papel', adminController.atualizarPapelUsuario);
 

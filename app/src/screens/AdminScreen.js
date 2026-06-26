@@ -68,6 +68,7 @@ export default function AdminScreen({ navigation }) {
   const [aba, setAba] = useState('produtos');
   const [resumo, setResumo] = useState(null);
   const [usuarios, setUsuarios] = useState([]);
+  const [auditoria, setAuditoria] = useState([]);
   const [produtos, setProdutos] = useState([]);
   const [termo, setTermo] = useState('');
   const [selecionado, setSelecionado] = useState(null);
@@ -88,12 +89,14 @@ export default function AdminScreen({ navigation }) {
   const carregar = useCallback(async () => {
     setErro('');
     try {
-      const [resumoResp, usuariosResp] = await Promise.all([
+      const [resumoResp, usuariosResp, auditoriaResp] = await Promise.all([
         api.get('/admin/resumo', { timeoutMs: 20000 }),
-        api.get('/admin/usuarios', { timeoutMs: 20000 })
+        api.get('/admin/usuarios', { timeoutMs: 20000 }),
+        api.get('/admin/auditoria?limite=30', { timeoutMs: 20000 })
       ]);
       setResumo(resumoResp);
       setUsuarios(usuariosResp.usuarios || []);
+      setAuditoria(auditoriaResp.logs || []);
       await buscarProdutos('');
     } catch (e) {
       setErro(e.message || 'Não foi possível carregar o painel.');
@@ -250,6 +253,9 @@ export default function AdminScreen({ navigation }) {
           <Pressable style={[styles.aba, aba === 'importacoes' && styles.abaAtiva]} onPress={() => setAba('importacoes')}>
             <Text style={[styles.abaTexto, aba === 'importacoes' && styles.abaTextoAtivo]}>Notas</Text>
           </Pressable>
+          <Pressable style={[styles.aba, aba === 'auditoria' && styles.abaAtiva]} onPress={() => setAba('auditoria')}>
+            <Text style={[styles.abaTexto, aba === 'auditoria' && styles.abaTextoAtivo]}>Logs</Text>
+          </Pressable>
         </View>
 
         {aba === 'produtos' && (
@@ -374,6 +380,27 @@ export default function AdminScreen({ navigation }) {
                   <Text style={styles.importacaoTempo}>
                     {item.tempo_processamento_ms ? `${item.tempo_processamento_ms}ms` : '—'}
                   </Text>
+                </View>
+              ))
+            )}
+          </>
+        )}
+
+        {aba === 'auditoria' && (
+          <>
+            <Text style={styles.secao}>Auditoria admin</Text>
+            {auditoria.length === 0 ? (
+              <Text style={styles.vazio}>Sem ações administrativas registradas.</Text>
+            ) : (
+              auditoria.map((item) => (
+                <View key={item.id} style={styles.importacaoRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.importacaoStatus}>{item.acao}</Text>
+                    <Text style={styles.importacaoMeta} numberOfLines={2}>
+                      {item.resumo || item.alvo_tipo} · {item.usuario?.email || 'admin'} · {item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : ''}
+                    </Text>
+                  </View>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={colors.brandDark} />
                 </View>
               ))
             )}

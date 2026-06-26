@@ -205,7 +205,10 @@ export default function AreaScreen({ navigation }) {
   async function buscarLojas() {
     setCarregandoLojas(true);
     try {
-      const res = await api.get('/estabelecimentos/mapa');
+      const query = localizacao
+        ? `?lat=${encodeURIComponent(localizacao.lat)}&lng=${encodeURIComponent(localizacao.lng)}&raio=${encodeURIComponent(distancia)}`
+        : '';
+      const res = await api.get(`/estabelecimentos/mapa${query}`);
       setEstabelecimentos(res.estabelecimentos || []);
     } catch (_e) {
       setErro('Não foi possível carregar as lojas próximas.');
@@ -347,6 +350,10 @@ export default function AreaScreen({ navigation }) {
     buscarLojas();
     usarLocalizacaoAtual();
   }, []);
+
+  useEffect(() => {
+    if (localizacao) buscarLojas();
+  }, [localizacao, distancia]);
 
   const nomeLocal = endereco
     ? [endereco.district || endereco.subregion, endereco.city, endereco.region].filter(Boolean).slice(0, 2).join(' · ')

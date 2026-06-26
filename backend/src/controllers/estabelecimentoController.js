@@ -3,6 +3,7 @@ const Estabelecimento = require('../models/Estabelecimento');
 const HistoricoPreco = require('../models/HistoricoPreco');
 const { geocodificarEndereco } = require('../services/geoService');
 const displayFormatter = require('../services/displayFormatter');
+const { registrarAdminAudit } = require('../services/adminAuditService');
 
 function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -22,6 +23,36 @@ function formatar(e) {
 
 function temLocalizacao(e) {
   return e.localizacao && e.localizacao.lat !== undefined && e.localizacao.lat !== null;
+}
+
+function distanciaKm(origem, destino) {
+  if (!origem || !destino) return null;
+  const R = 6371;
+  const toRad = (n) => (n * Math.PI) / 180;
+  const dLat = toRad(destino.lat - origem.lat);
+  const dLng = toRad(destino.lng - origem.lng);
+  const lat1 = toRad(origem.lat);
+  const lat2 = toRad(destino.lat);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function origemDaQuery(query = {}) {
+  if (query.lat === undefined && query.lng === undefined) return null;
+  const lat = Number(query.lat);
+  const lng = Number(query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return { invalida: true };
+  }
+  return { lat, lng };
+}
+
+function raioDaQuery(query = {}) {
+  const raio = Number(query.raio_km || query.raio || 0);
+  if (!Number.isFinite(raio) || raio <= 0) return null;
+  return Math.min(raio, 200);
 }
 
 function geocodificarPendentesEmSegundoPlano(estabelecimentos) {
@@ -61,8 +92,13 @@ async function listar(_req, res, next) {
 // Estabelecimentos com coordenadas + estatísticas para os marcadores do mapa:
 // total de preços registrados, produtos distintos, última atividade e
 // quantos produtos têm o MENOR preço naquele local.
-async function mapa(_req, res, next) {
+async function mapa(req, res, next) {
   try {
+    const origem = origemDaQuery(req.query);
+    if (origem && origem.invalida) {
+      return res.status(400).json({ error: 'lat/lng inválidos' });
+    }
+    const raioKm = raioDaQuery(req.query);
     const estabelecimentos = await Estabelecimento.find();
     geocodificarPendentesEmSegundoPlano(estabelecimentos);
 
@@ -98,18 +134,27 @@ async function mapa(_req, res, next) {
     const statsPorId = new Map(stats.map((s) => [String(s._id), s]));
     const menoresPorId = new Map(menores.map((m) => [String(m._id), m.produtos_mais_baratos]));
 
-    return res.json({
-      estabelecimentos: estabelecimentos.map((e) => {
+    let payload = estabelecimentos.map((e) => {
         const s = statsPorId.get(String(e._id));
+        const base = formatar(e);
+        const distancia = origem && base.localizacao ? distanciaKm(origem, base.localizacao) : null;
         return {
-          ...formatar(e),
+          ...base,
+          distancia_km: distancia === null ? null : Number(distancia.toFixed(3)),
           total_precos_registrados: s ? s.total_registros : 0,
           produtos_distintos: s ? s.produtos.length : 0,
           produtos_mais_baratos: menoresPorId.get(String(e._id)) || 0,
           ultima_atividade: s ? s.ultima_atividade : null
         };
-      })
-    });
+      });
+
+    if (origem) {
+      payload = payload
+        .filter((item) => item.distancia_km !== null && (!raioKm || item.distancia_km <= raioKm))
+        .sort((a, b) => a.distancia_km - b.distancia_km);
+    }
+
+    return res.json({ estabelecimentos: payload });
   } catch (err) {
     return next(err);
   }
@@ -204,6 +249,13 @@ async function criar(req, res, next) {
       endereco,
       localizacao: coords || undefined
     });
+    await registrarAdminAudit(req, {
+      acao: 'estabelecimento.criar',
+      alvo_tipo: 'estabelecimento',
+      alvo_id: estabelecimento._id,
+      resumo: `Estabelecimento criado: ${estabelecimento.nome}`,
+      dados: { cnpj: cnpjLimpo }
+    });
     return res.status(201).json(formatar(estabelecimento));
   } catch (err) {
     return next(err);
@@ -241,6 +293,13 @@ async function atualizar(req, res, next) {
       return res.status(404).json({ error: 'Estabelecimento não encontrado' });
     }
 
+    await registrarAdminAudit(req, {
+      acao: 'estabelecimento.atualizar',
+      alvo_tipo: 'estabelecimento',
+      alvo_id: estabelecimento._id,
+      resumo: `Estabelecimento atualizado: ${estabelecimento.nome}`,
+      dados: { campos: Object.keys(atualizacao) }
+    });
     return res.json(formatar(estabelecimento));
   } catch (err) {
     return next(err);
@@ -259,6 +318,13 @@ async function remover(req, res, next) {
       return res.status(404).json({ error: 'Estabelecimento não encontrado' });
     }
 
+    await registrarAdminAudit(req, {
+      acao: 'estabelecimento.remover',
+      alvo_tipo: 'estabelecimento',
+      alvo_id: estabelecimento._id,
+      resumo: `Estabelecimento removido: ${estabelecimento.nome}`,
+      dados: { cnpj: estabelecimento.cnpj }
+    });
     return res.json({ message: 'Estabelecimento removido' });
   } catch (err) {
     return next(err);

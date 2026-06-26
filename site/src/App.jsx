@@ -26,6 +26,16 @@ function money(value) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
 }
 
+function unitPrice(value) {
+  if (!value || value.valor === null || value.valor === undefined || !value.unidade) return '';
+  return `${money(value.valor)}/${value.unidade}`;
+}
+
+function priceFreshness(value) {
+  if (!value || !value.rotulo || value.nivel === 'sem_data') return '';
+  return value.rotulo;
+}
+
 function buildQuery(params) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -145,6 +155,9 @@ function SelectFilter({ label, value, options, onChange }) {
 }
 
 function ProductRow({ product, inList, onAdd }) {
+  const perUnit = unitPrice(product.preco_unidade);
+  const freshness = priceFreshness(product.confianca_preco || product.ultimo_preco?.confianca_preco);
+
   return (
     <article className="product-row">
       <div className="product-icon">
@@ -158,6 +171,8 @@ function ProductRow({ product, inList, onAdd }) {
       <div className="product-price">
         <small>menor</small>
         <strong>{money(product.menor_preco)}</strong>
+        {perUnit && <em>{perUnit}</em>}
+        {freshness && <span>{freshness}</span>}
       </div>
       <button className={inList ? 'ghost ok' : 'icon-action'} onClick={() => onAdd(product)} disabled={inList} type="button">
         {inList ? <Check size={17} /> : <Plus size={17} />}
@@ -168,6 +183,7 @@ function ProductRow({ product, inList, onAdd }) {
 
 function ListItem({ item, onToggle, onQuantity, onRemove }) {
   const qty = Number(item.quantidade) || 1;
+  const perUnit = unitPrice(item.preco_unidade);
   return (
     <article className="list-item">
       <button className={item.selecionado ? 'check-button selected' : 'check-button'} onClick={() => onToggle(item)} type="button">
@@ -180,6 +196,7 @@ function ListItem({ item, onToggle, onQuantity, onRemove }) {
         <h3>{item.nome}</h3>
         {productMeta(item) && <p>{productMeta(item)}</p>}
         <strong>{money(item.menor_preco)}</strong>
+        {perUnit && <span className="unit-line">{perUnit}</span>}
       </div>
       <div className="qty-control">
         <button onClick={() => onQuantity(item, Math.max(1, qty - 1))} disabled={qty <= 1} type="button">
@@ -598,6 +615,7 @@ function AdminPanel({ usuario, onBack, onLogout }) {
   const [tab, setTab] = useState('produtos');
   const [summary, setSummary] = useState(null);
   const [users, setUsers] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [products, setProducts] = useState([]);
   const [stores, setStores] = useState([]);
   const [productQuery, setProductQuery] = useState('');
@@ -623,6 +641,15 @@ function AdminPanel({ usuario, onBack, onLogout }) {
     }
   }, []);
 
+  const loadAudit = useCallback(async () => {
+    try {
+      const data = await api.get('/admin/auditoria?limite=50');
+      setAuditLogs(data.logs || []);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível carregar auditoria.');
+    }
+  }, []);
+
   const loadProducts = useCallback(async () => {
     try {
       const data = await api.get(`/produtos${buildQuery({ nome: productQuery.trim() })}`);
@@ -644,8 +671,9 @@ function AdminPanel({ usuario, onBack, onLogout }) {
   useEffect(() => {
     loadSummary();
     loadUsers();
+    loadAudit();
     loadStores();
-  }, [loadSummary, loadUsers, loadStores]);
+  }, [loadSummary, loadUsers, loadAudit, loadStores]);
 
   useEffect(() => {
     const timeout = setTimeout(loadProducts, 250);
@@ -818,6 +846,10 @@ function AdminPanel({ usuario, onBack, onLogout }) {
               <Users size={17} />
               Usuários
             </button>
+            <button className={tab === 'auditoria' ? 'active' : ''} onClick={() => setTab('auditoria')} type="button">
+              <Shield size={17} />
+              Auditoria
+            </button>
           </nav>
           <div className="import-list">
             <h3>Últimas leituras</h3>
@@ -841,6 +873,7 @@ function AdminPanel({ usuario, onBack, onLogout }) {
             <button className="ghost icon-only" onClick={() => {
               loadSummary();
               loadUsers();
+              loadAudit();
               loadProducts();
               loadStores();
             }} type="button">
@@ -933,6 +966,22 @@ function AdminPanel({ usuario, onBack, onLogout }) {
               ))}
             </div>
           )}
+
+          {tab === 'auditoria' && (
+            <div className="admin-rows">
+              {auditLogs.length === 0 ? (
+                <div className="empty-state">Sem ações administrativas registradas.</div>
+              ) : auditLogs.map((log) => (
+                <article className="admin-row user-row" key={log.id}>
+                  <div>
+                    <h3>{log.acao}</h3>
+                    <p>{log.resumo || log.alvo_tipo} · {log.usuario?.email || 'admin'} · {shortDate(log.criado_em)}</p>
+                  </div>
+                  <strong>{log.alvo_tipo}</strong>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
       </section>
     </main>
@@ -943,6 +992,30 @@ export default function App() {
   const stored = getStoredSession();
   const [usuario, setUsuario] = useState(stored.usuario);
   const [view, setView] = useState('app');
+
+  useEffect(() => {
+    let active = true;
+    async function refreshSession() {
+      if (!stored.token) return;
+      try {
+        const data = await api.get('/auth/me');
+        if (!active) return;
+        if (data.usuario) {
+          setStoredSession(stored.token, data.usuario);
+          setUsuario(data.usuario);
+        }
+      } catch (_err) {
+        if (!active) return;
+        clearStoredSession();
+        setUsuario(null);
+      }
+    }
+
+    refreshSession();
+    return () => {
+      active = false;
+    };
+  }, [stored.token]);
 
   if (!usuario) {
     return <LoginView onLogin={setUsuario} />;

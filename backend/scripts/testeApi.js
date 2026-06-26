@@ -97,6 +97,7 @@ async function main() {
   const HistoricoPreco = require('../src/models/HistoricoPreco');
   const ImportacaoNfce = require('../src/models/ImportacaoNfce');
   const ListaCompra = require('../src/models/ListaCompra');
+  const AdminAuditLog = require('../src/models/AdminAuditLog');
   const compraService = require('../src/services/compraService');
   await connectDB();
 
@@ -222,6 +223,10 @@ async function main() {
   }, adminToken);
   verificar(adminAtualizaProduto.status === 200 && adminAtualizaProduto.json.marca === 'Tio João',
     'admin atualiza produto');
+  const auditoriaProduto = await req('GET', '/admin/auditoria?limite=5', null, adminToken);
+  verificar(auditoriaProduto.status === 200 &&
+    auditoriaProduto.json.logs.some((log) => log.acao === 'produto.atualizar' && log.alvo_id === arroz.id),
+    'auditoria registra alteração administrativa de produto');
 
   const buscaPrefixo = await req('GET', '/produtos?nome=arr');
   verificar(buscaPrefixo.status === 200 && buscaPrefixo.json.produtos.some((p) => p.id === arroz.id),
@@ -367,6 +372,9 @@ async function main() {
 
   const cestaInvalida = await req('POST', '/comparacao/cesta', { itens: [{ produto_id: 'id ruim' }] }, token);
   verificar(cestaInvalida.status === 400, 'cesta com produto_id inválido retorna 400');
+
+  const totalAuditoria = await AdminAuditLog.countDocuments();
+  verificar(totalAuditoria >= 2, 'ações administrativas deixam trilha de auditoria');
 
   console.log('\n--- Mapa ---');
   const mapa = await req('GET', '/estabelecimentos/mapa');

@@ -48,6 +48,41 @@ const IMAGENS = [
     credito: 'Wikimedia Commons'
   },
   {
+    tipo: 'Feijão',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f4/Phaseolus_vulgaris_seed.jpg/960px-Phaseolus_vulgaris_seed.jpg',
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Café',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/A_small_cup_of_coffee.JPG/960px-A_small_cup_of_coffee.JPG',
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Açúcar',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Sugar_2xmacro.jpg/960px-Sugar_2xmacro.jpg',
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Macarrão',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Pasta_Penne_Lisce.jpg/960px-Pasta_Penne_Lisce.jpg',
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Leite',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Glass_of_milk_on_tablecloth.jpg/960px-Glass_of_milk_on_tablecloth.jpg',
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Tomate',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Tomato_je.jpg/960px-Tomato_je.jpg',
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Batata',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Patates.jpg/960px-Patates.jpg',
+    credito: 'Wikimedia Commons'
+  },
+  {
     tipo: 'Banana',
     url: 'https://upload.wikimedia.org/wikipedia/commons/d/de/Bananavarieties.jpg',
     credito: 'Wikimedia Commons'

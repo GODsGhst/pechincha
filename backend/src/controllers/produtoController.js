@@ -5,6 +5,7 @@ const productNormalizer = require('../services/productNormalizer');
 const productImageService = require('../services/productImageService');
 const displayFormatter = require('../services/displayFormatter');
 const pricePresentation = require('../services/pricePresentationService');
+const { registrarAdminAudit } = require('../services/adminAuditService');
 
 const CACHE_TTL_MS = 20 * 1000;
 const CACHE_MAX = 120;
@@ -660,6 +661,13 @@ async function criar(req, res, next) {
       imagem_credito: imagem_credito || null
     });
     limparCache();
+    await registrarAdminAudit(req, {
+      acao: 'produto.criar',
+      alvo_tipo: 'produto',
+      alvo_id: produto._id,
+      resumo: `Produto criado: ${produto.nome}`,
+      dados: { nome: produto.nome, categoria: produto.categoria, tipo: produto.tipo, marca: produto.marca }
+    });
     return res.status(201).json(formatarProduto(produto));
   } catch (err) {
     return next(err);
@@ -715,6 +723,13 @@ async function atualizar(req, res, next) {
     }
 
     limparCache();
+    await registrarAdminAudit(req, {
+      acao: 'produto.atualizar',
+      alvo_tipo: 'produto',
+      alvo_id: produto._id,
+      resumo: `Produto atualizado: ${produto.nome}`,
+      dados: { campos: Object.keys(atualizacao) }
+    });
     return res.json(formatarProduto(produto));
   } catch (err) {
     return next(err);
@@ -735,6 +750,13 @@ async function remover(req, res, next) {
 
     await HistoricoPreco.deleteMany({ produto_id: produto._id });
     limparCache();
+    await registrarAdminAudit(req, {
+      acao: 'produto.remover',
+      alvo_tipo: 'produto',
+      alvo_id: produto._id,
+      resumo: `Produto removido: ${produto.nome}`,
+      dados: { nome: produto.nome }
+    });
     return res.json({ message: 'Produto removido' });
   } catch (err) {
     return next(err);
