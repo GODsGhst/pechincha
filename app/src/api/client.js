@@ -34,10 +34,14 @@ if (__DEV__) {
 
 let authToken = null;
 const cacheGet = new Map();
+const requisicoesGet = new Map();
 const CACHE_MAX = 80;
 
 export function setAuthToken(token) {
-  if (token !== authToken) cacheGet.clear();
+  if (token !== authToken) {
+    cacheGet.clear();
+    requisicoesGet.clear();
+  }
   authToken = token;
 }
 
@@ -61,14 +65,32 @@ function salvarCacheGet(chave, valor, cacheMs) {
 }
 
 async function request(metodo, caminho, corpo, opcoes = {}) {
+  const chaveGet = metodo === 'GET' ? `${authToken || 'public'}:${API_BASE}${caminho}` : null;
   const cacheMs = metodo === 'GET' ? Number(opcoes.cacheMs || 0) : 0;
-  const cacheKey = cacheMs ? `${authToken || 'public'}:${API_BASE}${caminho}` : null;
+  const cacheKey = cacheMs ? chaveGet : null;
   const forcarRede = Boolean(opcoes.forceRefresh || opcoes.skipCache);
   if (cacheKey && !forcarRede) {
     const cached = obterCacheGet(cacheKey);
     if (cached) return cached;
   }
 
+  const podeReaproveitar = chaveGet && !forcarRede;
+  if (podeReaproveitar && requisicoesGet.has(chaveGet)) {
+    return requisicoesGet.get(chaveGet);
+  }
+
+  const requisicao = executarRequest(metodo, caminho, corpo, opcoes, cacheKey, cacheMs);
+  if (podeReaproveitar) {
+    requisicoesGet.set(chaveGet, requisicao);
+    requisicao.then(
+      () => requisicoesGet.delete(chaveGet),
+      () => requisicoesGet.delete(chaveGet)
+    );
+  }
+  return requisicao;
+}
+
+async function executarRequest(metodo, caminho, corpo, opcoes, cacheKey, cacheMs) {
   let resposta;
   const timeoutMs = opcoes.timeoutMs || 60000;
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;

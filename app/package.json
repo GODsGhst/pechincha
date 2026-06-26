@@ -1,6 +1,6 @@
 {
   "name": "app",
-  "version": "1.0.0",
+  "version": "1.0.10",
   "main": "index.js",
   "dependencies": {
     "@expo-google-fonts/dm-mono": "^0.4.2",

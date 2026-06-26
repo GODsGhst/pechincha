@@ -2,7 +2,7 @@
   "expo": {
     "name": "Pechincha",
     "slug": "pechincha",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "pechincha",
@@ -17,7 +17,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.consultprice.app",
-      "buildNumber": "10",
+      "buildNumber": "11",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "O Pechincha usa a câmera para ler o QR Code dos cupons fiscais.",
@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "com.consultprice.app",
-      "versionCode": 10,
+      "versionCode": 11,
       "adaptiveIcon": {
         "backgroundColor": "#0E3D2A",
         "foregroundImage": "./assets/android-icon-foreground.png",

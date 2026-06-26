@@ -5,6 +5,7 @@ const USER_KEY = 'pechincha.web.usuario';
 
 let authToken = localStorage.getItem(TOKEN_KEY);
 const cacheGet = new Map();
+const requestsGet = new Map();
 const CACHE_MAX = 80;
 
 export function getStoredSession() {
@@ -23,6 +24,7 @@ export function getStoredSession() {
 export function setStoredSession(token, usuario) {
   authToken = token;
   cacheGet.clear();
+  requestsGet.clear();
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(usuario));
 }
@@ -30,6 +32,7 @@ export function setStoredSession(token, usuario) {
 export function clearStoredSession() {
   authToken = null;
   cacheGet.clear();
+  requestsGet.clear();
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 }
@@ -54,12 +57,30 @@ function setCache(key, value, cacheMs) {
 }
 
 async function request(method, path, body, options = {}) {
+  const getKey = method === 'GET' ? `${authToken || 'public'}:${API_BASE}${path}` : null;
   const cacheMs = method === 'GET' ? Number(options.cacheMs || 0) : 0;
-  const cacheKey = cacheMs ? `${authToken || 'public'}:${API_BASE}${path}` : null;
+  const cacheKey = cacheMs ? getKey : null;
   const forceNetwork = Boolean(options.forceRefresh || options.skipCache);
   const cached = cacheKey && !forceNetwork ? getCache(cacheKey) : null;
   if (cached) return cached;
 
+  const canReuse = getKey && !forceNetwork;
+  if (canReuse && requestsGet.has(getKey)) {
+    return requestsGet.get(getKey);
+  }
+
+  const promise = runRequest(method, path, body, options, cacheKey, cacheMs);
+  if (canReuse) {
+    requestsGet.set(getKey, promise);
+    promise.then(
+      () => requestsGet.delete(getKey),
+      () => requestsGet.delete(getKey)
+    );
+  }
+  return promise;
+}
+
+async function runRequest(method, path, body, options, cacheKey, cacheMs) {
   let response;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 30000);
