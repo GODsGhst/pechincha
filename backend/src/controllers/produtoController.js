@@ -5,6 +5,11 @@ const productNormalizer = require('../services/productNormalizer');
 const productImageService = require('../services/productImageService');
 const displayFormatter = require('../services/displayFormatter');
 
+const CACHE_TTL_MS = 20 * 1000;
+const CACHE_MAX = 120;
+const LIMITE_FALLBACK_FILTROS = 1000;
+const cacheRespostas = new Map();
+
 function escapeRegex(texto) {
   return texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -35,29 +40,117 @@ function montarQueryProduto(filtros = {}) {
   return query;
 }
 
+function chaveCache(prefixo, query = {}) {
+  const partes = Object.entries(query)
+    .filter(([, valor]) => valor !== undefined && valor !== null && String(valor).trim() !== '')
+    .map(([chave, valor]) => [chave, String(valor).trim()])
+    .sort(([a], [b]) => a.localeCompare(b));
+  return `${prefixo}:${JSON.stringify(partes)}`;
+}
+
+function obterCache(chave) {
+  const item = cacheRespostas.get(chave);
+  if (!item) return null;
+  if (Date.now() - item.criadoEm > CACHE_TTL_MS) {
+    cacheRespostas.delete(chave);
+    return null;
+  }
+  return item.valor;
+}
+
+function salvarCache(chave, valor) {
+  if (cacheRespostas.size >= CACHE_MAX) {
+    const [primeira] = cacheRespostas.keys();
+    cacheRespostas.delete(primeira);
+  }
+  cacheRespostas.set(chave, { valor, criadoEm: Date.now() });
+}
+
+function limparCache() {
+  cacheRespostas.clear();
+}
+
 function arredondar(valor) {
   if (valor === null || valor === undefined || Number.isNaN(Number(valor))) return null;
   return Number(Number(valor).toFixed(2));
 }
 
-function formatarProduto(p) {
-  const imagem = productImageService.imagemDoProduto(p);
+function plano(produto) {
+  if (!produto) return {};
+  if (typeof produto.toObject === 'function') return produto.toObject();
+  return produto;
+}
+
+function metadadosProduto(produto) {
+  const base = plano(produto);
+  const texto = [base.nome, base.quantidade].filter(Boolean).join(' ');
+  const analise = productNormalizer.analisarProduto(texto || base.nome || '', {
+    categoria: base.categoria || undefined,
+    tipo: base.tipo || undefined,
+    marca: base.marca || undefined
+  });
+
   return {
-    id: p._id,
-    nome: displayFormatter.formatarNomeProduto(p),
-    categoria: p.categoria || null,
-    tipo: p.tipo || null,
-    marca: p.marca || null,
-    quantidade: p.quantidade || null,
+    categoria: base.categoria || analise.categoria || null,
+    tipo: base.tipo || analise.tipo || null,
+    marca: base.marca || analise.marca || null,
+    quantidade: base.quantidade || analise.quantidade || null,
+    quantidade_normalizada: base.quantidade_normalizada || analise.quantidade_normalizada || null
+  };
+}
+
+function produtoComMetadados(produto) {
+  const base = plano(produto);
+  return { ...base, ...metadadosProduto(base) };
+}
+
+function combinaFiltrosInferidos(produto, filtros, ignorarCampo = null) {
+  const efetivos = { ...filtros };
+  if (ignorarCampo) delete efetivos[ignorarCampo];
+  return productNormalizer.analiseCombinaFiltros(metadadosProduto(produto), efetivos);
+}
+
+function ordenarTexto(lista) {
+  return [...new Set(lista.filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+}
+
+function textoIgual(a, b) {
+  return productNormalizer.normalizarTexto(a || '') === productNormalizer.normalizarTexto(b || '');
+}
+
+function mesclarProdutos(...listas) {
+  const porId = new Map();
+  for (const lista of listas) {
+    for (const produto of lista || []) {
+      if (produto && produto._id && !porId.has(String(produto._id))) {
+        porId.set(String(produto._id), produto);
+      }
+    }
+  }
+  return [...porId.values()];
+}
+
+function formatarProduto(p) {
+  const produto = produtoComMetadados(p);
+  const imagem = productImageService.imagemDoProduto(produto);
+  const ultimoPreco = produto.ultimo_preco;
+  return {
+    id: produto._id,
+    nome: displayFormatter.formatarNomeProduto(produto),
+    categoria: produto.categoria,
+    tipo: produto.tipo,
+    marca: produto.marca,
+    quantidade: produto.quantidade,
     imagem_url: imagem.url,
     imagem_credito: imagem.credito,
-    menor_preco: p.menor_preco,
-    ultimo_preco: p.ultimo_preco && p.ultimo_preco.valor !== undefined && p.ultimo_preco.valor !== null
+    menor_preco: produto.menor_preco,
+    ultimo_preco: ultimoPreco && ultimoPreco.valor !== undefined && ultimoPreco.valor !== null
       ? {
-          valor: p.ultimo_preco.valor,
-          data: p.ultimo_preco.data,
-          estabelecimento: p.ultimo_preco.estabelecimento_id
-            ? displayFormatter.formatarNomeEstabelecimento(p.ultimo_preco.estabelecimento_id.nome)
+          valor: ultimoPreco.valor,
+          data: ultimoPreco.data,
+          estabelecimento: ultimoPreco.estabelecimento_id && ultimoPreco.estabelecimento_id.nome
+            ? displayFormatter.formatarNomeEstabelecimento(ultimoPreco.estabelecimento_id.nome)
             : null
         }
       : null
@@ -176,9 +269,37 @@ async function estatisticasPreco(produtoId) {
   };
 }
 
+async function buscarProdutosSemNome(filtros) {
+  const temFiltros = Object.keys(filtros).length > 0;
+  if (!temFiltros) {
+    return Produto.find()
+      .sort({ nome: 1 })
+      .limit(100)
+      .populate('ultimo_preco.estabelecimento_id', 'nome');
+  }
+
+  const [diretos, candidatos] = await Promise.all([
+    Produto.find(montarQueryProduto(filtros))
+      .sort({ nome: 1 })
+      .limit(100)
+      .populate('ultimo_preco.estabelecimento_id', 'nome'),
+    Produto.find()
+      .sort({ criado_em: -1 })
+      .limit(LIMITE_FALLBACK_FILTROS)
+      .populate('ultimo_preco.estabelecimento_id', 'nome')
+  ]);
+
+  const inferidos = candidatos.filter((produto) => combinaFiltrosInferidos(produto, filtros));
+  return mesclarProdutos(diretos, inferidos).slice(0, 100);
+}
+
 // GET /api/produtos?nome=arroz&categoria=Alimentos&tipo=Arroz&marca=Tio%20João&quantidade=5kg
 async function listar(req, res, next) {
   try {
+    const cacheKey = chaveCache('produtos', req.query);
+    const cached = obterCache(cacheKey);
+    if (cached) return res.json(cached);
+
     const filtros = montarFiltros(req.query);
     let produtos;
     if (req.query.nome) {
@@ -190,13 +311,12 @@ async function listar(req, res, next) {
       const porId = new Map(populados.map((p) => [String(p._id), p]));
       produtos = ids.map((id) => porId.get(String(id))).filter(Boolean); // mantém a ordem de relevância
     } else {
-      produtos = await Produto.find(montarQueryProduto(filtros))
-        .sort({ nome: 1 })
-        .limit(100)
-        .populate('ultimo_preco.estabelecimento_id', 'nome');
+      produtos = await buscarProdutosSemNome(filtros);
     }
 
-    return res.json({ produtos: produtos.map(formatarProduto) });
+    const payload = { produtos: produtos.map(formatarProduto) };
+    salvarCache(cacheKey, payload);
+    return res.json(payload);
   } catch (err) {
     return next(err);
   }
@@ -207,8 +327,13 @@ async function listar(req, res, next) {
 // cada um foi encontrado (alimenta a barra lateral do mapa).
 async function menores(req, res, next) {
   try {
+    const cacheKey = chaveCache('produtos:menores', req.query);
+    const cached = obterCache(cacheKey);
+    if (cached) return res.json(cached);
+
     const limite = Math.min(Number(req.query.limite) || 20, 100);
     const filtros = montarFiltros(req.query);
+    const temFiltros = Object.keys(filtros).length > 0;
 
     const pipeline = [
       { $sort: { valor: 1, data: -1 } },
@@ -242,10 +367,10 @@ async function menores(req, res, next) {
     if (filtros.tipo) matchProduto['produto.tipo'] = regexExato(filtros.tipo);
     if (filtros.marca) matchProduto['produto.marca'] = regexExato(filtros.marca);
     if (filtros.quantidade) matchProduto['produto.quantidade'] = regexExato(filtros.quantidade);
-    if (Object.keys(matchProduto).length > 0) pipeline.push({ $match: matchProduto });
+    if (Object.keys(matchProduto).length > 0 && !temFiltros) pipeline.push({ $match: matchProduto });
 
     pipeline.push(
-      { $limit: limite },
+      { $limit: temFiltros ? Math.min(Math.max(limite * 10, 100), 500) : limite },
       {
         $lookup: {
           from: 'estabelecimentos',
@@ -258,17 +383,21 @@ async function menores(req, res, next) {
     );
 
     const resultados = await HistoricoPreco.aggregate(pipeline);
+    const resultadosFiltrados = temFiltros
+      ? resultados.filter((r) => combinaFiltrosInferidos(r.produto, filtros)).slice(0, limite)
+      : resultados;
 
-    return res.json({
-      menores_precos: resultados.map((r) => {
-        const imagem = productImageService.imagemDoProduto(r.produto);
+    const payload = {
+      menores_precos: resultadosFiltrados.map((r) => {
+        const produto = produtoComMetadados(r.produto);
+        const imagem = productImageService.imagemDoProduto(produto);
         return {
           produto_id: r._id,
-          produto: displayFormatter.formatarNomeProduto(r.produto),
-          categoria: r.produto.categoria || null,
-          tipo: r.produto.tipo || null,
-          marca: r.produto.marca || null,
-          quantidade: r.produto.quantidade || null,
+          produto: displayFormatter.formatarNomeProduto(produto),
+          categoria: produto.categoria,
+          tipo: produto.tipo,
+          marca: produto.marca,
+          quantidade: produto.quantidade,
           imagem_url: imagem.url,
           imagem_credito: imagem.credito,
           valor: r.valor,
@@ -281,7 +410,9 @@ async function menores(req, res, next) {
             : null
         };
       })
-    });
+    };
+    salvarCache(cacheKey, payload);
+    return res.json(payload);
   } catch (err) {
     return next(err);
   }
@@ -290,24 +421,45 @@ async function menores(req, res, next) {
 // GET /api/produtos/filtros?categoria=Limpeza&tipo=Detergente&marca=Ypê
 async function filtros(req, res, next) {
   try {
-    const filtrosAtuais = montarFiltros(req.query);
-    const base = montarQueryProduto(filtrosAtuais);
-    const baseSemQuantidade = { ...base };
-    delete baseSemQuantidade.quantidade;
+    const cacheKey = chaveCache('produtos:filtros', req.query);
+    const cached = obterCache(cacheKey);
+    if (cached) return res.json(cached);
 
-    const [categorias, tipos, marcas, quantidades] = await Promise.all([
-      Produto.distinct('categoria', { categoria: { $nin: [null, ''] } }),
-      Produto.distinct('tipo', { ...base, tipo: { $nin: [null, ''] } }),
-      Produto.distinct('marca', { ...base, marca: { $nin: [null, ''] } }),
-      Produto.distinct('quantidade', { ...baseSemQuantidade, quantidade: { $nin: [null, ''] } })
+    const filtrosAtuais = montarFiltros(req.query);
+    const produtos = await Produto.find()
+      .select('nome nome_normalizado chave_dedup categoria tipo marca quantidade quantidade_normalizada criado_em')
+      .sort({ criado_em: -1 })
+      .limit(LIMITE_FALLBACK_FILTROS)
+      .lean();
+    const metas = produtos.map(metadadosProduto);
+
+    const categorias = ordenarTexto([
+      ...productNormalizer.CATEGORIAS.map((item) => item.categoria),
+      ...metas.map((meta) => meta.categoria)
     ]);
 
-    return res.json({
-      categorias: categorias.filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR')),
-      tipos: tipos.filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR')),
-      marcas: marcas.filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR')),
-      quantidades: quantidades.filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }))
-    });
+    const tiposConhecidos = productNormalizer.TIPOS
+      .filter((item) => !filtrosAtuais.categoria || textoIgual(item.categoria, filtrosAtuais.categoria))
+      .map((item) => item.tipo);
+
+    const tipos = ordenarTexto([
+      ...tiposConhecidos,
+      ...metas
+        .filter((meta) => combinaFiltrosInferidos(meta, filtrosAtuais, 'tipo'))
+        .map((meta) => meta.tipo)
+    ]);
+
+    const marcas = ordenarTexto(metas
+      .filter((meta) => combinaFiltrosInferidos(meta, filtrosAtuais, 'marca'))
+      .map((meta) => meta.marca));
+
+    const quantidades = ordenarTexto(metas
+      .filter((meta) => combinaFiltrosInferidos(meta, filtrosAtuais, 'quantidade'))
+      .map((meta) => meta.quantidade));
+
+    const payload = { categorias, tipos, marcas, quantidades };
+    salvarCache(cacheKey, payload);
+    return res.json(payload);
   } catch (err) {
     return next(err);
   }
@@ -316,6 +468,10 @@ async function filtros(req, res, next) {
 // GET /api/produtos/sugestoes?termo=coca&categoria=Bebidas
 async function sugestoes(req, res, next) {
   try {
+    const cacheKey = chaveCache('produtos:sugestoes', req.query);
+    const cached = obterCache(cacheKey);
+    if (cached) return res.json(cached);
+
     const limite = Math.min(Number(req.query.limite) || 8, 20);
     const termo = String(req.query.termo || '').trim();
     const filtros = montarFiltros(req.query);
@@ -324,12 +480,14 @@ async function sugestoes(req, res, next) {
     if (termo) {
       produtos = await productNormalizer.buscarProdutos(termo, filtros);
     } else {
-      produtos = await Produto.find(montarQueryProduto(filtros)).sort({ nome: 1 }).limit(limite);
+      produtos = await buscarProdutosSemNome(filtros);
     }
 
-    return res.json({
+    const payload = {
       sugestoes: produtos.slice(0, limite).map(formatarProduto)
-    });
+    };
+    salvarCache(cacheKey, payload);
+    return res.json(payload);
   } catch (err) {
     return next(err);
   }
@@ -354,15 +512,16 @@ async function detalhar(req, res, next) {
         .populate('estabelecimento_id', 'nome'),
       estatisticasPreco(produto._id)
     ]);
-    const imagem = productImageService.imagemDoProduto(produto);
+    const produtoNormalizado = produtoComMetadados(produto);
+    const imagem = productImageService.imagemDoProduto(produtoNormalizado);
 
     return res.json({
       id: produto._id,
-      nome: displayFormatter.formatarNomeProduto(produto),
-      categoria: produto.categoria || null,
-      tipo: produto.tipo || null,
-      marca: produto.marca || null,
-      quantidade: produto.quantidade || null,
+      nome: displayFormatter.formatarNomeProduto(produtoNormalizado),
+      categoria: produtoNormalizado.categoria,
+      tipo: produtoNormalizado.tipo,
+      marca: produtoNormalizado.marca,
+      quantidade: produtoNormalizado.quantidade,
       imagem_url: imagem.url,
       imagem_credito: imagem.credito,
       menor_preco: produto.menor_preco,
@@ -408,6 +567,7 @@ async function criar(req, res, next) {
       imagem_url: imagem_url || null,
       imagem_credito: imagem_credito || null
     });
+    limparCache();
     return res.status(201).json(formatarProduto(produto));
   } catch (err) {
     return next(err);
@@ -462,6 +622,7 @@ async function atualizar(req, res, next) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
 
+    limparCache();
     return res.json(formatarProduto(produto));
   } catch (err) {
     return next(err);
@@ -481,6 +642,7 @@ async function remover(req, res, next) {
     }
 
     await HistoricoPreco.deleteMany({ produto_id: produto._id });
+    limparCache();
     return res.json({ message: 'Produto removido' });
   } catch (err) {
     return next(err);

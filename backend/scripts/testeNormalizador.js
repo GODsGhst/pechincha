@@ -26,7 +26,7 @@ function check(cond, nome) {
   const b = await encontrarOuCriarProduto('Arroz Tio João 5 Kg');
   check(b.novo === false && String(b.produto._id) === String(a.produto._id),
     'variação de escrita (acento/caixa/espaço) -> MESMO produto');
-  check(b.produto.nome === 'Arroz Tio João 5kg', 'nome de exibição fica padronizado');
+  check(b.produto.nome === 'Tio João 5kg', 'nome de exibição fica padronizado');
   check(b.produto.categoria === 'Alimentos' && b.produto.tipo === 'Arroz' && b.produto.marca === 'Tio João',
     'arroz recebe categoria/tipo/marca');
   check(b.produto.quantidade === '5kg', 'arroz recebe quantidade/tamanho');
@@ -43,7 +43,7 @@ function check(cond, nome) {
   const coca4 = await encontrarOuCriarProduto('coca2l');
   check([coca2, coca3, coca4].every((r) => !r.novo && String(r.produto._id) === String(coca1.produto._id)),
     'cocacola2L / coca-cola 2L / coca2L -> MESMO produto');
-  check(coca1.produto.nome === 'Refrigerante Coca-Cola 2L', 'Coca-Cola fica com nome organizado');
+  check(coca1.produto.nome === 'Coca-Cola 2L', 'Coca-Cola fica com nome organizado');
   check(coca1.produto.categoria === 'Bebidas' && coca1.produto.tipo === 'Refrigerante' && coca1.produto.marca === 'Coca-Cola',
     'Coca-Cola recebe categoria/tipo/marca');
   check(coca1.produto.quantidade === '2L', 'Coca-Cola recebe quantidade/tamanho');
@@ -52,7 +52,7 @@ function check(cond, nome) {
   const det2 = await encontrarOuCriarProduto('DETERG YPE GIRASSOL 500 ML');
   check(det2.novo === false && String(det2.produto._id) === String(det1.produto._id),
     'detergente Ypê com abreviação -> MESMO produto');
-  check(det1.produto.nome === 'Detergente Ypê Girassol 500ml', 'detergente fica com nome organizado');
+  check(det1.produto.nome === 'Ypê Girassol 500ml', 'detergente fica com nome organizado');
   check(det1.produto.categoria === 'Limpeza' && det1.produto.tipo === 'Detergente' && det1.produto.marca === 'Ypê',
     'detergente recebe categoria/tipo/marca');
   check(det1.produto.quantidade === '500ml', 'detergente recebe quantidade/tamanho');
@@ -64,17 +64,25 @@ function check(cond, nome) {
   const ama3 = await encontrarOuCriarProduto('AMA AMACIANTE 2L');
   check(ama3.novo === false && String(ama3.produto._id) === String(ama2.produto._id),
     'amaciantes Ama 2L escritos diferente -> MESMO produto');
-  check(ama2.produto.nome === 'Amaciante Ama 2L', 'amaciante fica com nome organizado');
+  check(ama2.produto.nome === 'Ama 2L', 'amaciante fica com nome organizado');
 
   const analiseDet = analisarProduto('detengerte ype 500ml girassol');
   check(analiseDet.categoria === 'Limpeza' && analiseDet.marca === 'Ypê',
     'análise identifica marca/categoria em variação próxima');
-  check(formatarNomeProduto('DETERGENTE YPE GIRASSOL 500ML') === 'Detergente Ypê Girassol 500ml',
+  check(formatarNomeProduto('DETERGENTE YPE GIRASSOL 500ML') === 'Ypê Girassol 500ml',
     'formatador remove caixa alta inconsistente');
+
+  const analiseAluminio = analisarProduto('ALUM BRILHALUMINIO LIMP TRAD 500ML');
+  check(analiseAluminio.categoria === 'Limpeza' &&
+    analiseAluminio.tipo === 'Limpa alumínio' &&
+    analiseAluminio.marca === 'Brilhalumínio',
+    'limpa alumínio recebe categoria/tipo/marca');
+  check(formatarNomeProduto('ALUM BRILHALUMINIO LIMP TRAD 500ML') === 'Brilhalumínio Tradicional 500ml',
+    'limpa alumínio fica com nome legível');
 
   console.log('\n--- Busca tolerante ---');
   const busca = await buscarProdutos('arroz tio joao');
-  check(busca.length >= 1 && busca.some((p) => p.nome.includes('Arroz Tio João')),
+  check(busca.length >= 1 && busca.some((p) => p.nome.includes('Tio João')),
     '"arroz tio joao" encontra o produto mesmo sem o tamanho');
 
   const buscaBebida = await buscarProdutos('coca 2l', { categoria: 'Bebidas', tipo: 'Refrigerante' });

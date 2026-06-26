@@ -20,6 +20,26 @@ const IMAGENS = [
     credito: 'Wikimedia Commons'
   },
   {
+    tipo: 'Limpa alumínio',
+    url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Limpador',
+    url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Desinfetante',
+    url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Água sanitária',
+    url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
+    credito: 'Wikimedia Commons'
+  },
+  {
     tipo: 'Sabão',
     url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
     credito: 'Wikimedia Commons'

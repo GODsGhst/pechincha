@@ -44,7 +44,8 @@ const TIPOS = [
   { tipo: 'Sabão', categoria: 'Limpeza', aliases: ['sabao', 'sabão', 'sabao po', 'sabão pó', 'lava roupas'] },
   { tipo: 'Desinfetante', categoria: 'Limpeza', aliases: ['desinfetante', 'desinf'] },
   { tipo: 'Água sanitária', categoria: 'Limpeza', aliases: ['agua sanitaria', 'água sanitária', 'sanitaria', 'sanitária'] },
-  { tipo: 'Limpador', categoria: 'Limpeza', aliases: ['limpador', 'multiuso', 'limpa'] },
+  { tipo: 'Limpa alumínio', categoria: 'Limpeza', aliases: ['limpa aluminio', 'limpa alumínio', 'brilha aluminio', 'brilhaluminio', 'aluminio', 'alum', 'limp'] },
+  { tipo: 'Limpador', categoria: 'Limpeza', aliases: ['limpador', 'multiuso', 'limpa', 'limp'] },
   { tipo: 'Esponja', categoria: 'Limpeza', aliases: ['esponja', 'bombril', 'palha aco', 'palha aço'] },
 
   { tipo: 'Papel higiênico', categoria: 'Higiene', aliases: ['papel higienico', 'papel higiênico'] },
@@ -99,7 +100,9 @@ const MARCAS = [
   { marca: 'Pepsi', aliases: ['pepsi'] },
   { marca: 'Fanta', aliases: ['fanta'] },
   { marca: 'Sprite', aliases: ['sprite'] },
-  { marca: 'Guaraná Antarctica', aliases: ['guarana antarctica', 'guaraná antarctica', 'antarctica'] }
+  { marca: 'Guaraná Antarctica', aliases: ['guarana antarctica', 'guaraná antarctica', 'antarctica'] },
+  { marca: 'Brilhalumínio', aliases: ['brilhaluminio', 'brilha aluminio', 'brilha alumínio'] },
+  { marca: 'Uau', aliases: ['uau'] }
 ];
 
 function normalizarTexto(texto) {
@@ -219,6 +222,11 @@ function tituloToken(token) {
     po: 'Pó',
     sabao: 'Sabão',
     sanitaria: 'Sanitária',
+    trad: 'Tradicional',
+    tradicional: 'Tradicional',
+    perf: 'Perfume',
+    seducao: 'Sedução',
+    verm: 'Vermelho',
     ype: 'Ypê'
   };
   if (especiais[token]) return especiais[token];
@@ -234,8 +242,8 @@ function formatarNomeProduto(nomeBruto, analisePronta = null) {
   const analise = analisePronta || analisarProduto(nomeBruto);
   const partes = [];
 
-  if (analise.tipo) partes.push(analise.tipo);
   if (analise.marca) partes.push(analise.marca);
+  else if (analise.tipo) partes.push(analise.tipo);
   for (const extra of analise.extras) partes.push(tituloToken(extra));
   for (const quantidade of analise.quantidades) partes.push(formatarQuantidade(quantidade));
 
@@ -350,6 +358,30 @@ function analiseDoProdutoSalvo(produto) {
 function quantidadesIguais(a, b) {
   if (a.quantidades.length !== b.quantidades.length) return false;
   return a.quantidades.every((q, i) => q === b.quantidades[i]);
+}
+
+function valoresIguais(a, b) {
+  return normalizarTexto(a || '') === normalizarTexto(b || '');
+}
+
+function normalizarQuantidadeFiltro(valor) {
+  return normalizarQuantidades(extrairQuantidades(prepararTextoComparacao(valor)));
+}
+
+function analiseCombinaFiltros(analise, filtros = {}) {
+  if (filtros.categoria && !valoresIguais(analise.categoria, filtros.categoria)) return false;
+  if (filtros.tipo && !valoresIguais(analise.tipo, filtros.tipo)) return false;
+  if (filtros.marca && !valoresIguais(analise.marca, filtros.marca)) return false;
+
+  if (filtros.quantidade) {
+    const quantidadeNormalizada = normalizarQuantidadeFiltro(filtros.quantidade);
+    if (quantidadeNormalizada) {
+      return analise.quantidade_normalizada === quantidadeNormalizada;
+    }
+    return valoresIguais(analise.quantidade, filtros.quantidade);
+  }
+
+  return true;
 }
 
 function mesmoEscopo(a, b) {
@@ -664,7 +696,17 @@ async function buscarProdutos(descricao, filtros = {}) {
   const listas = await Promise.all(
     [...consultas.values()].map((query) => Produto.find(query).limit(MAX_PRODUTOS_FUZZY))
   );
-  const produtos = mesclarProdutosPorId(...listas);
+  let produtos = mesclarProdutosPorId(...listas);
+
+  // Bancos antigos podem ter produtos sem categoria/tipo/marca gravados.
+  // Quando um filtro zera a consulta indexada, carregamos uma janela recente e
+  // aplicamos o filtro pela análise do nome para preservar a busca no app.
+  if (produtos.length === 0 && Object.keys(queryFiltros).length > 0) {
+    produtos = await Produto.find()
+      .select(CAMPOS_PRODUTO_DEDUP)
+      .sort({ criado_em: -1 })
+      .limit(MAX_PRODUTOS_FUZZY);
+  }
   if (produtos.length === 0) return [];
 
   const entradas = produtos.map((p) => {
@@ -696,6 +738,7 @@ async function buscarProdutos(descricao, filtros = {}) {
   );
 
   return entradas
+    .filter((entrada) => analiseCombinaFiltros(entrada.analise, filtros))
     .map((entrada) => {
       const id = String(entrada.ref._id);
       const scoreFuse = resultadosFuse.has(id) ? resultadosFuse.get(id) : 1;
@@ -734,9 +777,13 @@ module.exports = {
   normalizarTexto,
   tokenizar,
   analisarProduto,
+  analiseCombinaFiltros,
   formatarNomeProduto,
   formatarQuantidades,
   normalizarQuantidades,
+  CATEGORIAS,
+  TIPOS,
+  MARCAS,
   LIMIAR_DEDUP,
   LIMIAR_BUSCA
 };
