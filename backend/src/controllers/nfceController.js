@@ -418,7 +418,6 @@ async function processar(req, res, next) {
         titulo.trim().slice(0, 80),
         /tabResult/i.test(conteudoHtml),
         (String(conteudoHtml).match(/<table/gi) || []).length);
-      console.warn('[NFC-e][SEM ITENS] trecho:', String(conteudoHtml).replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\s+/g, ' ').slice(0, 800));
       return responderFalha(422, 'Nenhum item encontrado no HTML da NFC-e');
     }
     if (!dados.estabelecimento.nome && !dados.estabelecimento.cnpj) {
