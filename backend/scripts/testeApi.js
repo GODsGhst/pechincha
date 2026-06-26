@@ -72,6 +72,7 @@ async function main() {
 
   process.env.MONGODB_URI = mongod.getUri('comparador_precos_teste');
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'segredo_de_teste';
+  process.env.CORS_ORIGIN = 'https://pechincha-web.onrender.com';
 
   const app = require('../src/app');
   const connectDB = require('../src/config/database');
@@ -86,21 +87,31 @@ async function main() {
   const servidor = app.listen(PORTA);
   const base = `http://localhost:${PORTA}/api`;
 
-  const req = async (metodo, rota, corpo, token) => {
+  const req = async (metodo, rota, corpo, token, headersExtras = {}) => {
     const resposta = await fetch(base + rota, {
       method: metodo,
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headersExtras
       },
       body: corpo ? JSON.stringify(corpo) : undefined
     });
     let json = null;
     try { json = await resposta.json(); } catch (_e) { /* sem corpo */ }
-    return { status: resposta.status, json };
+    return { status: resposta.status, json, headers: resposta.headers };
   };
 
   console.log('\n--- Autenticação ---');
+  const corsPermitido = await req('GET', '/produtos', null, null, { Origin: 'https://pechincha-web.onrender.com' });
+  verificar(corsPermitido.status === 200 &&
+    corsPermitido.headers.get('access-control-allow-origin') === 'https://pechincha-web.onrender.com',
+    'CORS permite apenas origem web configurada');
+
+  const corsBloqueado = await req('GET', '/produtos', null, null, { Origin: 'https://site-estranho.example' });
+  verificar(corsBloqueado.status === 200 && !corsBloqueado.headers.get('access-control-allow-origin'),
+    'CORS não libera origem desconhecida');
+
   const reg = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: 'senha123' });
   verificar(reg.status === 201 && !!reg.json.token, 'register retorna 201 + token');
   verificar(reg.json.usuario.papel === 'usuario', 'register retorna papel usuario');
@@ -130,6 +141,9 @@ async function main() {
   console.log('\n--- Processamento de NFC-e ---');
   const semToken = await req('POST', '/nfce/processar', { html: HTML_SUPERMERCADO_ABC });
   verificar(semToken.status === 401, 'processar sem token retorna 401');
+
+  const urlLocalBloqueada = await req('POST', '/nfce/processar', { url_origem: 'http://127.0.0.1/notinha' }, token);
+  verificar(urlLocalBloqueada.status === 422, 'NFC-e bloqueia URL local/privada');
 
   const nfce1 = await req('POST', '/nfce/processar', { html: HTML_SUPERMERCADO_ABC }, token);
   verificar(nfce1.status === 201, 'NFC-e 1 retorna 201', JSON.stringify(nfce1.json));

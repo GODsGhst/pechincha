@@ -21,10 +21,18 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Em produção, restrinja a origens conhecidas via CORS_ORIGIN (separadas por vírgula)
-const corsOptions = process.env.CORS_ORIGIN
-  ? { origin: process.env.CORS_ORIGIN.split(',').map((o) => o.trim()) }
-  : {};
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+  : [];
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.length === 0 && process.env.NODE_ENV !== 'production') return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, false);
+  }
+};
 
 app.use(cors(corsOptions));
 // Limite maior para aceitar fotos de cupom em base64

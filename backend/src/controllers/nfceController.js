@@ -1,4 +1,6 @@
 const axios = require('axios');
+const dns = require('dns').promises;
+const net = require('net');
 const Compra = require('../models/Compra');
 const Estabelecimento = require('../models/Estabelecimento');
 const { parseNfceHtml, chaveAcessoDaUrl } = require('../services/nfceParser');
@@ -6,16 +8,124 @@ const compraService = require('../services/compraService');
 const { geocodificarEndereco } = require('../services/geoService');
 const { lerQrCodeDeImagem, base64ParaBuffer } = require('../services/qrCodeService');
 
+const MAX_HTML_BYTES = 2 * 1024 * 1024;
+const MAX_REDIRECTS = 3;
+
+function erroValidacaoUrl(mensagem) {
+  const erro = new Error(mensagem);
+  erro.status = 422;
+  return erro;
+}
+
+function ipPrivadoOuReservado(address) {
+  const versao = net.isIP(address);
+  if (!versao) return true;
+
+  if (versao === 4) {
+    const partes = address.split('.').map(Number);
+    const [a, b] = partes;
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 192 && b === 0) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      a >= 224
+    );
+  }
+
+  const normalizado = address.toLowerCase();
+  return (
+    normalizado === '::' ||
+    normalizado === '::1' ||
+    normalizado.startsWith('fc') ||
+    normalizado.startsWith('fd') ||
+    normalizado.startsWith('fe80:') ||
+    normalizado.startsWith('::ffff:127.') ||
+    normalizado.startsWith('::ffff:10.') ||
+    normalizado.startsWith('::ffff:192.168.')
+  );
+}
+
+async function validarUrlPublica(urlRaw) {
+  let url;
+  try {
+    url = new URL(String(urlRaw || ''));
+  } catch (_err) {
+    return null;
+  }
+
+  if (!['http:', 'https:'].includes(url.protocol)) return null;
+
+  const hostname = url.hostname.toLowerCase();
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === 'metadata.google.internal'
+  ) {
+    return null;
+  }
+
+  if (net.isIP(hostname)) {
+    return ipPrivadoOuReservado(hostname) ? null : url.toString();
+  }
+
+  let enderecos;
+  try {
+    enderecos = await dns.lookup(hostname, { all: true });
+  } catch (_err) {
+    return null;
+  }
+
+  if (!enderecos.length || enderecos.some((entry) => ipPrivadoOuReservado(entry.address))) {
+    return null;
+  }
+
+  return url.toString();
+}
+
 async function buscarHtmlDaNfce(url) {
-  const resposta = await axios.get(url, {
-    timeout: 15000,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.7'
+  const urlValidada = await validarUrlPublica(url);
+  if (!urlValidada) {
+    throw erroValidacaoUrl('URL de NFC-e inválida');
+  }
+
+  let atual = urlValidada;
+  for (let tentativa = 0; tentativa <= MAX_REDIRECTS; tentativa += 1) {
+    const resposta = await axios.get(atual, {
+      maxRedirects: 0,
+      maxContentLength: MAX_HTML_BYTES,
+      maxBodyLength: MAX_HTML_BYTES,
+      validateStatus: (status) => status >= 200 && status < 400,
+      responseType: 'text',
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.7'
+      }
+    });
+
+    if (resposta.status >= 300 && resposta.status < 400 && resposta.headers.location) {
+      const proxima = new URL(resposta.headers.location, atual).toString();
+      const proximaValidada = await validarUrlPublica(proxima);
+      if (!proximaValidada) throw erroValidacaoUrl('Redirecionamento de NFC-e inválido');
+      atual = proximaValidada;
+      continue;
     }
-  });
-  return resposta.data;
+
+    const data = String(resposta.data || '');
+    if (Buffer.byteLength(data, 'utf8') > MAX_HTML_BYTES) {
+      throw new Error('HTML da NFC-e excede o limite');
+    }
+    return data;
+  }
+
+  throw new Error('Muitos redirecionamentos ao acessar NFC-e');
 }
 
 // POST /api/nfce/processar — body: { imagem_base64 } OU { url_origem } OU { html }
@@ -48,9 +158,15 @@ async function processar(req, res, next) {
     if (!conteudoHtml) {
       try {
         conteudoHtml = await buscarHtmlDaNfce(url_origem);
-      } catch (_err) {
+      } catch (err) {
+        if (err.status === 422) {
+          return res.status(422).json({ error: err.message });
+        }
         return res.status(502).json({ error: 'Não foi possível acessar a URL da NFC-e' });
       }
+    }
+    if (Buffer.byteLength(String(conteudoHtml || ''), 'utf8') > MAX_HTML_BYTES) {
+      return res.status(413).json({ error: 'HTML da NFC-e excede o limite permitido' });
     }
 
     let dados = parseNfceHtml(conteudoHtml);
