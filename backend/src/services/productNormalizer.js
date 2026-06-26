@@ -749,6 +749,13 @@ async function buscarProdutos(descricao, filtros = {}) {
   const analiseBusca = analisarProduto(descricao);
   if (!analiseBusca.normalizado) return [];
 
+  const filtrosInferidos = {
+    categoria: filtros.categoria || analiseBusca.categoria || undefined,
+    tipo: filtros.tipo || analiseBusca.tipo || undefined,
+    marca: filtros.marca || analiseBusca.marca || undefined,
+    quantidade: filtros.quantidade || undefined
+  };
+
   const quantidadeNormalizada = filtros.quantidade
     ? normalizarQuantidades(extrairQuantidades(prepararTextoComparacao(filtros.quantidade)))
     : undefined;
@@ -842,7 +849,7 @@ async function buscarProdutos(descricao, filtros = {}) {
   );
 
   return entradas
-    .filter((entrada) => analiseCombinaFiltros(entrada.analise, filtros))
+    .filter((entrada) => analiseCombinaFiltros(entrada.analise, filtrosInferidos))
     .map((entrada) => {
       const id = String(entrada.ref._id);
       const scoreFuse = resultadosFuse.has(id) ? resultadosFuse.get(id) : 1;

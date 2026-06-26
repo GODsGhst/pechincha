@@ -110,6 +110,13 @@ function check(cond, nome) {
     analiseSanitaria.quantidade === '5L',
     'água sanitária não entra como bebida');
 
+  const aguaMineral = await encontrarOuCriarProduto('CRYSTAL GAS MIN S 500ML');
+  const produtoSanitaria = await encontrarOuCriarProduto('AGUA CLASSIC SANIT 5L');
+  const buscaSanitaria = await buscarProdutos('agua sanit');
+  check(buscaSanitaria.some((p) => String(p._id) === String(produtoSanitaria.produto._id)) &&
+    !buscaSanitaria.some((p) => String(p._id) === String(aguaMineral.produto._id)),
+    'busca "agua sanit" não retorna água mineral');
+
   const analiseCerveja = analisarProduto('BRAHMA CERV LATA 350ML');
   check(analiseCerveja.categoria === 'Bebidas' &&
     analiseCerveja.tipo === 'Cerveja' &&
