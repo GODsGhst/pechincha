@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Building2,
   Check,
   ChevronDown,
   CircleAlert,
+  Edit3,
   LogOut,
   Minus,
+  PackageSearch,
   Plus,
   RefreshCw,
+  Save,
   Search,
+  Shield,
   ShoppingCart,
   Store,
   Trash2,
-  UserRound
+  UserRound,
+  Users
 } from 'lucide-react';
 import { api, clearStoredSession, getStoredSession, setStoredSession } from './api';
 
@@ -191,7 +197,7 @@ function ListItem({ item, onToggle, onQuantity, onRemove }) {
   );
 }
 
-function Dashboard({ usuario, onLogout }) {
+function Dashboard({ usuario, onLogout, onOpenAdmin }) {
   const [products, setProducts] = useState([]);
   const [filters, setFilters] = useState({ categorias: [], tipos: [], marcas: [], quantidades: [] });
   const [query, setQuery] = useState('');
@@ -369,10 +375,18 @@ function Dashboard({ usuario, onLogout }) {
             <p>{usuario?.nome || usuario?.email}</p>
           </div>
         </div>
-        <button className="ghost" onClick={logout} type="button">
-          <LogOut size={17} />
-          Sair
-        </button>
+        <div className="topbar-actions">
+          <button className="ghost" onClick={logout} type="button">
+            <LogOut size={17} />
+            Sair
+          </button>
+          {usuario?.papel === 'admin' && (
+            <button className="primary" onClick={onOpenAdmin} type="button">
+              <Shield size={17} />
+              Admin
+            </button>
+          )}
+        </div>
       </header>
 
       <section className="workspace">
@@ -517,13 +531,410 @@ function Dashboard({ usuario, onLogout }) {
   );
 }
 
+function shortDate(value) {
+  if (!value) return '--';
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(value));
+}
+
+const emptyProductForm = {
+  id: null,
+  nome: '',
+  categoria: '',
+  tipo: '',
+  marca: '',
+  quantidade: '',
+  imagem_url: '',
+  imagem_credito: ''
+};
+
+const emptyStoreForm = {
+  id: null,
+  nome: '',
+  cnpj: '',
+  endereco: '',
+  lat: '',
+  lng: ''
+};
+
+function productNameForForm(product) {
+  const name = String(product?.nome || '').trim();
+  const amount = String(product?.quantidade || '').trim();
+  if (!name || !amount) return name;
+  const escaped = amount.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return name.replace(new RegExp(`\\s+${escaped}$`, 'i'), '').trim() || name;
+}
+
+function StatBox({ label, value }) {
+  return (
+    <article className="stat-box">
+      <span>{label}</span>
+      <strong>{value ?? 0}</strong>
+    </article>
+  );
+}
+
+function AdminPanel({ usuario, onBack, onLogout }) {
+  const [tab, setTab] = useState('produtos');
+  const [summary, setSummary] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [stores, setStores] = useState([]);
+  const [productQuery, setProductQuery] = useState('');
+  const [productForm, setProductForm] = useState(emptyProductForm);
+  const [storeForm, setStoreForm] = useState(emptyStoreForm);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const loadSummary = useCallback(async () => {
+    try {
+      setSummary(await api.get('/admin/resumo'));
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível carregar o resumo admin.');
+    }
+  }, []);
+
+  const loadUsers = useCallback(async () => {
+    try {
+      const data = await api.get('/admin/usuarios');
+      setUsers(data.usuarios || []);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível carregar usuários.');
+    }
+  }, []);
+
+  const loadProducts = useCallback(async () => {
+    try {
+      const data = await api.get(`/produtos${buildQuery({ nome: productQuery.trim() })}`);
+      setProducts(data.produtos || []);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível carregar produtos.');
+    }
+  }, [productQuery]);
+
+  const loadStores = useCallback(async () => {
+    try {
+      const data = await api.get('/estabelecimentos');
+      setStores(data.estabelecimentos || []);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível carregar estabelecimentos.');
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSummary();
+    loadUsers();
+    loadStores();
+  }, [loadSummary, loadUsers, loadStores]);
+
+  useEffect(() => {
+    const timeout = setTimeout(loadProducts, 250);
+    return () => clearTimeout(timeout);
+  }, [loadProducts]);
+
+  function logout() {
+    clearStoredSession();
+    onLogout();
+  }
+
+  function editProduct(product) {
+    setProductForm({
+      id: product.id,
+      nome: productNameForForm(product),
+      categoria: product.categoria || '',
+      tipo: product.tipo || '',
+      marca: product.marca || '',
+      quantidade: product.quantidade || '',
+      imagem_url: product.imagem_url || '',
+      imagem_credito: product.imagem_credito || ''
+    });
+  }
+
+  function editStore(store) {
+    setStoreForm({
+      id: store.id,
+      nome: store.nome || '',
+      cnpj: store.cnpj || '',
+      endereco: store.endereco || '',
+      lat: store.localizacao?.lat ?? '',
+      lng: store.localizacao?.lng ?? ''
+    });
+  }
+
+  async function saveProduct(event) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+    try {
+      const body = {
+        nome: productForm.nome,
+        categoria: productForm.categoria || null,
+        tipo: productForm.tipo || null,
+        marca: productForm.marca || null,
+        quantidade: productForm.quantidade || null,
+        imagem_url: productForm.imagem_url || null,
+        imagem_credito: productForm.imagem_credito || null
+      };
+      if (productForm.id) await api.put(`/produtos/${productForm.id}`, body);
+      else await api.post('/produtos', body);
+      setProductForm(emptyProductForm);
+      setMessage('Produto salvo.');
+      await Promise.all([loadProducts(), loadSummary()]);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível salvar produto.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteProduct(product) {
+    if (!window.confirm(`Remover "${product.nome}" e o histórico desse produto?`)) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      await api.delete(`/produtos/${product.id}`);
+      if (productForm.id === product.id) setProductForm(emptyProductForm);
+      setMessage('Produto removido.');
+      await Promise.all([loadProducts(), loadSummary()]);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível remover produto.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveStore(event) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+    try {
+      const lat = storeForm.lat === '' ? null : Number(storeForm.lat);
+      const lng = storeForm.lng === '' ? null : Number(storeForm.lng);
+      const localizacao = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+      const body = {
+        nome: storeForm.nome,
+        endereco: storeForm.endereco || null,
+        localizacao
+      };
+      if (storeForm.id) await api.put(`/estabelecimentos/${storeForm.id}`, body);
+      else await api.post('/estabelecimentos', { ...body, cnpj: storeForm.cnpj });
+      setStoreForm(emptyStoreForm);
+      setMessage('Estabelecimento salvo.');
+      await Promise.all([loadStores(), loadSummary()]);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível salvar estabelecimento.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteStore(store) {
+    if (!window.confirm(`Remover "${store.nome}"?`)) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      await api.delete(`/estabelecimentos/${store.id}`);
+      if (storeForm.id === store.id) setStoreForm(emptyStoreForm);
+      setMessage('Estabelecimento removido.');
+      await Promise.all([loadStores(), loadSummary()]);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível remover estabelecimento.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updateUserRole(user, role) {
+    setMessage('');
+    try {
+      const updated = await api.put(`/admin/usuarios/${user.id}/papel`, { papel: role });
+      setUsers((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setMessage('Permissão atualizada.');
+      await loadSummary();
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível atualizar a permissão.');
+    }
+  }
+
+  const totals = summary?.totais || {};
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <div className="brand-row compact">
+          <div className="brand-mark">P</div>
+          <div>
+            <h1>Admin Pechincha</h1>
+            <p>{usuario?.nome || usuario?.email}</p>
+          </div>
+        </div>
+        <div className="topbar-actions">
+          <button className="ghost" onClick={onBack} type="button">Voltar</button>
+          <button className="ghost" onClick={logout} type="button">
+            <LogOut size={17} />
+            Sair
+          </button>
+        </div>
+      </header>
+
+      <section className="admin-shell">
+        <aside className="admin-sidebar">
+          <div className="summary-grid">
+            <StatBox label="usuários" value={totals.usuarios} />
+            <StatBox label="produtos" value={totals.produtos} />
+            <StatBox label="lojas" value={totals.estabelecimentos} />
+            <StatBox label="compras" value={totals.compras} />
+          </div>
+          <nav className="admin-tabs">
+            <button className={tab === 'produtos' ? 'active' : ''} onClick={() => setTab('produtos')} type="button">
+              <PackageSearch size={17} />
+              Produtos
+            </button>
+            <button className={tab === 'lojas' ? 'active' : ''} onClick={() => setTab('lojas')} type="button">
+              <Building2 size={17} />
+              Estabelecimentos
+            </button>
+            <button className={tab === 'usuarios' ? 'active' : ''} onClick={() => setTab('usuarios')} type="button">
+              <Users size={17} />
+              Usuários
+            </button>
+          </nav>
+          <div className="import-list">
+            <h3>Últimas leituras</h3>
+            {(summary?.ultimas_importacoes || []).length === 0 ? (
+              <p>Nenhuma importação registrada.</p>
+            ) : summary.ultimas_importacoes.map((item) => (
+              <article key={item.id}>
+                <strong>{item.status}</strong>
+                <span>{shortDate(item.recebido_em)}</span>
+              </article>
+            ))}
+          </div>
+        </aside>
+
+        <section className="admin-content">
+          <div className="panel-head">
+            <div>
+              <h2>{tab === 'produtos' ? 'Produtos' : tab === 'lojas' ? 'Estabelecimentos' : 'Usuários'}</h2>
+              <p>Permissões e dados protegidos por conta admin</p>
+            </div>
+            <button className="ghost icon-only" onClick={() => {
+              loadSummary();
+              loadUsers();
+              loadProducts();
+              loadStores();
+            }} type="button">
+              <RefreshCw size={17} />
+            </button>
+          </div>
+
+          {message && <div className="admin-message"><CircleAlert size={16} />{message}</div>}
+
+          {tab === 'produtos' && (
+            <div className="admin-grid">
+              <div className="admin-list">
+                <div className="search-box">
+                  <Search size={18} />
+                  <input placeholder="Buscar produto para editar" value={productQuery} onChange={(e) => setProductQuery(e.target.value)} />
+                </div>
+                <div className="admin-rows">
+                  {products.map((product) => (
+                    <article className="admin-row" key={product.id}>
+                      <div>
+                        <h3>{product.nome}</h3>
+                        <p>{productMeta(product) || 'Sem metadados'} · {money(product.menor_preco)}</p>
+                      </div>
+                      <button className="ghost icon-only" onClick={() => editProduct(product)} type="button"><Edit3 size={16} /></button>
+                      <button className="trash-button" onClick={() => deleteProduct(product)} type="button"><Trash2 size={16} /></button>
+                    </article>
+                  ))}
+                </div>
+              </div>
+              <form className="admin-form" onSubmit={saveProduct}>
+                <h3>{productForm.id ? 'Editar produto' : 'Novo produto'}</h3>
+                <label>Nome<input value={productForm.nome} onChange={(e) => setProductForm((p) => ({ ...p, nome: e.target.value }))} required /></label>
+                <label>Categoria<input value={productForm.categoria} onChange={(e) => setProductForm((p) => ({ ...p, categoria: e.target.value }))} /></label>
+                <label>Tipo<input value={productForm.tipo} onChange={(e) => setProductForm((p) => ({ ...p, tipo: e.target.value }))} /></label>
+                <label>Marca<input value={productForm.marca} onChange={(e) => setProductForm((p) => ({ ...p, marca: e.target.value }))} /></label>
+                <label>Quantidade<input value={productForm.quantidade} onChange={(e) => setProductForm((p) => ({ ...p, quantidade: e.target.value }))} placeholder="2L, 500ml, 5kg" /></label>
+                <label>Imagem URL<input value={productForm.imagem_url} onChange={(e) => setProductForm((p) => ({ ...p, imagem_url: e.target.value }))} /></label>
+                <div className="form-actions">
+                  <button className="ghost" onClick={() => setProductForm(emptyProductForm)} type="button">Limpar</button>
+                  <button className="primary" disabled={loading} type="submit"><Save size={16} />Salvar</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {tab === 'lojas' && (
+            <div className="admin-grid">
+              <div className="admin-rows">
+                {stores.map((store) => (
+                  <article className="admin-row" key={store.id}>
+                    <div>
+                      <h3>{store.nome}</h3>
+                      <p>{store.cnpj} · {store.endereco || 'sem endereço'}</p>
+                    </div>
+                    <button className="ghost icon-only" onClick={() => editStore(store)} type="button"><Edit3 size={16} /></button>
+                    <button className="trash-button" onClick={() => deleteStore(store)} type="button"><Trash2 size={16} /></button>
+                  </article>
+                ))}
+              </div>
+              <form className="admin-form" onSubmit={saveStore}>
+                <h3>{storeForm.id ? 'Editar estabelecimento' : 'Novo estabelecimento'}</h3>
+                <label>Nome<input value={storeForm.nome} onChange={(e) => setStoreForm((p) => ({ ...p, nome: e.target.value }))} required /></label>
+                <label>CNPJ<input value={storeForm.cnpj} onChange={(e) => setStoreForm((p) => ({ ...p, cnpj: e.target.value }))} disabled={Boolean(storeForm.id)} required={!storeForm.id} /></label>
+                <label>Endereço<input value={storeForm.endereco} onChange={(e) => setStoreForm((p) => ({ ...p, endereco: e.target.value }))} /></label>
+                <div className="coord-grid">
+                  <label>Latitude<input value={storeForm.lat} onChange={(e) => setStoreForm((p) => ({ ...p, lat: e.target.value }))} /></label>
+                  <label>Longitude<input value={storeForm.lng} onChange={(e) => setStoreForm((p) => ({ ...p, lng: e.target.value }))} /></label>
+                </div>
+                <div className="form-actions">
+                  <button className="ghost" onClick={() => setStoreForm(emptyStoreForm)} type="button">Limpar</button>
+                  <button className="primary" disabled={loading} type="submit"><Save size={16} />Salvar</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {tab === 'usuarios' && (
+            <div className="admin-rows">
+              {users.map((item) => (
+                <article className="admin-row user-row" key={item.id}>
+                  <div>
+                    <h3>{item.nome}</h3>
+                    <p>{item.email} · criado em {shortDate(item.criado_em)}</p>
+                  </div>
+                  <select value={item.papel} onChange={(e) => updateUserRole(item, e.target.value)}>
+                    <option value="usuario">Usuário</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
   const stored = getStoredSession();
   const [usuario, setUsuario] = useState(stored.usuario);
+  const [view, setView] = useState('app');
 
   if (!usuario) {
     return <LoginView onLogin={setUsuario} />;
   }
 
-  return <Dashboard usuario={usuario} onLogout={() => setUsuario(null)} />;
+  if (usuario.papel === 'admin' && view === 'admin') {
+    return <AdminPanel usuario={usuario} onBack={() => setView('app')} onLogout={() => setUsuario(null)} />;
+  }
+
+  return <Dashboard usuario={usuario} onLogout={() => setUsuario(null)} onOpenAdmin={() => setView('admin')} />;
 }

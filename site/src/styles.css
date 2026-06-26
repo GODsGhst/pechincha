@@ -230,6 +230,14 @@ select:focus {
   max-width: 1440px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .workspace {
   max-width: 1440px;
   margin: 0 auto;
@@ -535,13 +543,212 @@ select:focus {
   font-size: 14px;
 }
 
+.admin-shell {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.admin-sidebar,
+.admin-content,
+.admin-form {
+  background: #ffffff;
+  border: 1px solid #dfddd2;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.admin-sidebar {
+  position: sticky;
+  top: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stat-box {
+  border: 1px solid #e1ded2;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfaf6;
+}
+
+.stat-box span {
+  display: block;
+  color: #697067;
+  font-size: 11px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.stat-box strong {
+  display: block;
+  color: #0b5138;
+  font-size: 24px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-tabs {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-tabs button {
+  min-height: 42px;
+  border: 1px solid #d7d4c8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #384039;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  font-weight: 800;
+}
+
+.admin-tabs button.active {
+  background: #0f6b4a;
+  border-color: #0f6b4a;
+  color: #ffffff;
+}
+
+.import-list {
+  border-top: 1px solid #e7e4da;
+  padding-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.import-list h3,
+.admin-form h3 {
+  font-size: 15px;
+}
+
+.import-list p {
+  color: #697067;
+  font-size: 13px;
+}
+
+.import-list article {
+  border: 1px solid #e1ded2;
+  border-radius: 8px;
+  padding: 9px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.import-list article strong {
+  color: #0b5138;
+}
+
+.import-list article span {
+  color: #697067;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-message {
+  min-height: 38px;
+  border: 1px solid #ffd4c4;
+  border-radius: 8px;
+  background: #fff7f2;
+  color: #a04320;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 14px;
+  align-items: start;
+}
+
+.admin-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-row {
+  min-height: 68px;
+  border: 1px solid #e1ded2;
+  border-radius: 8px;
+  background: #ffffff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px 34px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+}
+
+.admin-row.user-row {
+  grid-template-columns: minmax(0, 1fr) 180px;
+}
+
+.admin-row h3 {
+  font-size: 14px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.admin-row p {
+  color: #697067;
+  font-size: 12px;
+  line-height: 1.35;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.admin-form {
+  display: grid;
+  gap: 12px;
+}
+
+.coord-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+}
+
 @media (max-width: 1100px) {
   .workspace {
     grid-template-columns: 1fr;
   }
 
-  .side-panel {
+  .side-panel,
+  .admin-sidebar {
     position: static;
+  }
+
+  .admin-shell,
+  .admin-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -552,6 +759,7 @@ select:focus {
 
   .topbar {
     align-items: flex-start;
+    flex-direction: column;
   }
 
   .filters-grid {
@@ -565,6 +773,27 @@ select:focus {
   .product-price {
     grid-column: 2 / 3;
     text-align: left;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .summary-grid,
+  .coord-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-row,
+  .admin-row.user-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-row .icon-only,
+  .admin-row .trash-button,
+  .admin-row select {
+    width: 100%;
   }
 }
 

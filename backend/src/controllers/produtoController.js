@@ -377,12 +377,14 @@ async function detalhar(req, res, next) {
 // POST /api/produtos
 async function criar(req, res, next) {
   try {
-    const { nome, categoria, tipo, marca, imagem_url, imagem_credito } = req.body || {};
+    const { nome, categoria, tipo, marca, quantidade, imagem_url, imagem_credito } = req.body || {};
     if (!nome || !nome.trim()) {
       return res.status(400).json({ error: 'Campo obrigatório: nome' });
     }
 
-    const analise = productNormalizer.analisarProduto(nome, { categoria, tipo, marca });
+    const quantidadeLimpa = quantidade !== undefined ? String(quantidade || '').trim() || null : null;
+    const textoAnalise = quantidadeLimpa ? `${nome} ${quantidadeLimpa}` : nome;
+    const analise = productNormalizer.analisarProduto(textoAnalise, { categoria, tipo, marca });
     const nomeExibicao = productNormalizer.formatarNomeProduto(nome, analise);
     const produto = await Produto.create({
       nome: nomeExibicao,
@@ -391,7 +393,7 @@ async function criar(req, res, next) {
       categoria: analise.categoria,
       tipo: analise.tipo,
       marca: analise.marca,
-      quantidade: analise.quantidade,
+      quantidade: quantidadeLimpa || analise.quantidade,
       quantidade_normalizada: analise.quantidade_normalizada,
       imagem_url: imagem_url || null,
       imagem_credito: imagem_credito || null
@@ -409,26 +411,39 @@ async function atualizar(req, res, next) {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    const { nome, categoria, tipo, marca, imagem_url, imagem_credito } = req.body || {};
+    const produtoAtual = await Produto.findById(req.params.id);
+    if (!produtoAtual) {
+      return res.status(404).json({ error: 'Produto não encontrado' });
+    }
+
+    const { nome, categoria, tipo, marca, quantidade, imagem_url, imagem_credito } = req.body || {};
     const atualizacao = {};
-    if (nome !== undefined) {
-      if (!nome || !nome.trim()) {
+    if (nome !== undefined || quantidade !== undefined) {
+      const nomeBase = nome !== undefined ? nome : produtoAtual.nome;
+      if (!nomeBase || !String(nomeBase).trim()) {
         return res.status(400).json({ error: 'Nome não pode ser vazio' });
       }
-      const analise = productNormalizer.analisarProduto(nome, { categoria, tipo, marca });
-      const nomeExibicao = productNormalizer.formatarNomeProduto(nome, analise);
+
+      const quantidadeLimpa = quantidade !== undefined ? String(quantidade || '').trim() || null : produtoAtual.quantidade;
+      const textoAnalise = quantidadeLimpa ? `${nomeBase} ${quantidadeLimpa}` : nomeBase;
+      const analise = productNormalizer.analisarProduto(textoAnalise, {
+        categoria: categoria !== undefined ? categoria : produtoAtual.categoria,
+        tipo: tipo !== undefined ? tipo : produtoAtual.tipo,
+        marca: marca !== undefined ? marca : produtoAtual.marca
+      });
+      const nomeExibicao = productNormalizer.formatarNomeProduto(nomeBase, analise);
       atualizacao.nome = nomeExibicao;
       atualizacao.nome_normalizado = productNormalizer.normalizarTexto(nomeExibicao);
       atualizacao.chave_dedup = analise.confiavel ? analise.chave : null;
       if (categoria === undefined) atualizacao.categoria = analise.categoria;
       if (tipo === undefined) atualizacao.tipo = analise.tipo;
       if (marca === undefined) atualizacao.marca = analise.marca;
-      atualizacao.quantidade = analise.quantidade;
+      atualizacao.quantidade = quantidadeLimpa || analise.quantidade;
       atualizacao.quantidade_normalizada = analise.quantidade_normalizada;
     }
-    if (categoria !== undefined) atualizacao.categoria = categoria;
-    if (tipo !== undefined) atualizacao.tipo = tipo;
-    if (marca !== undefined) atualizacao.marca = marca;
+    if (categoria !== undefined) atualizacao.categoria = categoria || null;
+    if (tipo !== undefined) atualizacao.tipo = tipo || null;
+    if (marca !== undefined) atualizacao.marca = marca || null;
     if (imagem_url !== undefined) atualizacao.imagem_url = imagem_url || null;
     if (imagem_credito !== undefined) atualizacao.imagem_credito = imagem_credito || null;
 

@@ -154,6 +154,29 @@ async function main() {
   }, token);
   verificar(estabelecimentoDireto.status === 403, 'usuário comum não cria estabelecimento direto');
 
+  console.log('\n--- Administração ---');
+  const adminReg = await req('POST', '/auth/register', { nome: 'Admin Geral', email: 'admin@email.com', senha: 'senha123' });
+  verificar(adminReg.status === 201, 'cria usuário que será promovido a admin');
+  await Usuario.updateOne({ email: 'admin@email.com' }, { $set: { papel: 'admin' } });
+  const adminLogin = await req('POST', '/auth/login', { email: 'admin@email.com', senha: 'senha123' });
+  verificar(adminLogin.status === 200 && adminLogin.json.usuario.papel === 'admin', 'login admin retorna papel admin');
+  const adminToken = adminLogin.json.token;
+
+  const resumoUsuario = await req('GET', '/admin/resumo', null, token);
+  verificar(resumoUsuario.status === 403, 'usuário comum não acessa painel admin');
+
+  const resumoAdmin = await req('GET', '/admin/resumo', null, adminToken);
+  verificar(resumoAdmin.status === 200 && resumoAdmin.json.totais.usuarios >= 2,
+    'admin acessa resumo administrativo');
+
+  const usuariosAdmin = await req('GET', '/admin/usuarios', null, adminToken);
+  verificar(usuariosAdmin.status === 200 && usuariosAdmin.json.usuarios.some((u) => u.email === 'admin@email.com'),
+    'admin lista usuários');
+
+  const adminUser = usuariosAdmin.json.usuarios.find((u) => u.email === 'admin@email.com');
+  const removerUltimoAdmin = await req('PUT', `/admin/usuarios/${adminUser.id}/papel`, { papel: 'usuario' }, adminToken);
+  verificar(removerUltimoAdmin.status === 400, 'não remove o último administrador');
+
   console.log('\n--- Processamento de NFC-e ---');
   const semToken = await req('POST', '/nfce/processar', { html: HTML_SUPERMERCADO_ABC });
   verificar(semToken.status === 401, 'processar sem token retorna 401');
@@ -183,6 +206,14 @@ async function main() {
   verificar(arroz.quantidade === '5kg', 'produto retorna quantidade/tamanho');
   verificar(typeof arroz.imagem_url === 'string' && arroz.imagem_url.includes('Golden%20Rice'),
     'produto retorna imagem pública quando conhecida');
+
+  const adminAtualizaProduto = await req('PUT', `/produtos/${arroz.id}`, {
+    categoria: 'Alimentos',
+    tipo: 'Arroz',
+    marca: 'Tio João'
+  }, adminToken);
+  verificar(adminAtualizaProduto.status === 200 && adminAtualizaProduto.json.marca === 'Tio João',
+    'admin atualiza produto');
 
   const buscaPrefixo = await req('GET', '/produtos?nome=arr');
   verificar(buscaPrefixo.status === 200 && buscaPrefixo.json.produtos.some((p) => p.id === arroz.id),

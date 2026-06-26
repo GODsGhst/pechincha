@@ -8,6 +8,7 @@ const estabelecimentoRoutes = require('./routes/estabelecimentoRoutes');
 const nfceRoutes = require('./routes/nfceRoutes');
 const comparacaoRoutes = require('./routes/comparacaoRoutes');
 const listaRoutes = require('./routes/listaRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
@@ -95,6 +96,7 @@ app.use('/api/estabelecimentos', estabelecimentoRoutes);
 app.use('/api/nfce', nfceRoutes);
 app.use('/api/comparacao', comparacaoRoutes);
 app.use('/api/lista', listaRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Rota não encontrada' });
