@@ -744,14 +744,21 @@ async function buscarProdutos(descricao, filtros = {}) {
       const scoreFuse = resultadosFuse.has(id) ? resultadosFuse.get(id) : 1;
       const scoreTokens = pontuarTokensBusca(tokensBusca, entrada.tokens);
       const chaveIgual = chaveBusca && entrada.ref.chave_dedup === chaveBusca;
+      const marcaCombina = Boolean(analiseBusca.marca && entrada.analise.marca === analiseBusca.marca);
+      const tipoCombina = Boolean(analiseBusca.tipo && entrada.analise.tipo === analiseBusca.tipo);
+      const quantidadeCombina = Boolean(
+        analiseBusca.quantidade_normalizada &&
+        entrada.analise.quantidade_normalizada === analiseBusca.quantidade_normalizada
+      );
+      const escopoNomeCombina = analiseBusca.marca ? marcaCombina : tipoCombina;
       const aceitoPorMetadado = Boolean(
-        (analiseBusca.tipo && entrada.analise.tipo === analiseBusca.tipo) ||
-        (analiseBusca.marca && entrada.analise.marca === analiseBusca.marca) ||
-        (analiseBusca.quantidade_normalizada &&
-          entrada.analise.quantidade_normalizada === analiseBusca.quantidade_normalizada)
+        (escopoNomeCombina && (!analiseBusca.quantidade_normalizada || quantidadeCombina || scoreTokens >= 0.5)) ||
+        (!analiseBusca.marca && !analiseBusca.tipo && quantidadeCombina && scoreTokens >= 0.5)
       );
       const aceitoPorFuse = resultadosFuse.has(id) &&
         (tokensBusca.length <= 1 ? scoreFuse <= 0.25 : scoreFuse <= LIMIAR_BUSCA);
+      const aceitoPorTokens = scoreTokens >= (tokensBusca.length <= 1 ? 0.5 : 0.45) &&
+        (!analiseBusca.marca || marcaCombina);
       const bonusEscopo =
         (analiseBusca.marca && entrada.analise.marca === analiseBusca.marca ? 0.08 : 0) +
         (analiseBusca.tipo && entrada.analise.tipo === analiseBusca.tipo ? 0.06 : 0) +
@@ -761,7 +768,7 @@ async function buscarProdutos(descricao, filtros = {}) {
       return {
         ref: entrada.ref,
         score: scoreFuse - (scoreTokens * 0.35) - bonusEscopo - (chaveIgual ? 0.4 : 0),
-        aceito: chaveIgual || aceitoPorMetadado || aceitoPorFuse || scoreTokens >= (tokensBusca.length <= 1 ? 0.5 : 0.45)
+        aceito: chaveIgual || aceitoPorMetadado || aceitoPorFuse || aceitoPorTokens
       };
     })
     .filter((resultado) => resultado.aceito)
