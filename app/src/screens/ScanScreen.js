@@ -20,6 +20,7 @@ export default function ScanScreen({ navigation }) {
   const [processando, setProcessando] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [erro, setErro] = useState(null);
+  const [duplicado, setDuplicado] = useState(null);
   const [etapa, setEtapa] = useState('');
   const [segundos, setSegundos] = useState(0);
 
@@ -45,11 +46,53 @@ export default function ScanScreen({ navigation }) {
     setEtapa(mensagem);
     setSegundos(0);
     setErro(null);
+    setDuplicado(null);
   }
 
   function mensagemProcessamento() {
     if (!processando) return 'Posicione o QR Code dentro da moldura';
     return segundos >= 3 ? `${etapa} ${segundos}s` : etapa;
+  }
+
+  function horarioCurto(valor) {
+    if (!valor) return null;
+    try {
+      return new Date(valor).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function tratarFalhaProcessamento(e, mensagemPadrao) {
+    if (e.status === 409) {
+      const info = e.payload || {};
+      setDuplicado(info.compra_id ? info : null);
+      if (info.status_importacao === 'processando') {
+        const recebido = horarioCurto(info.recebido_em);
+        setErro(recebido
+          ? `Este cupom já está sendo processado desde ${recebido}. Aguarde alguns segundos.`
+          : 'Este cupom já está sendo processado. Aguarde alguns segundos.');
+        return;
+      }
+
+      const importado = horarioCurto(info.importado_em);
+      setErro(importado
+        ? `Este cupom já foi cadastrado em ${importado}. Cada nota conta uma vez só.`
+        : 'Este cupom já foi cadastrado. Cada nota conta uma vez só.');
+      return;
+    }
+
+    if (e.status === 'timeout') {
+      setErro('A leitura demorou demais. A nota pode estar lenta na SEFAZ; tente novamente em alguns segundos.');
+      return;
+    }
+
+    setErro(e.message || mensagemPadrao);
   }
 
   async function processarUrl(url) {
@@ -59,11 +102,7 @@ export default function ScanScreen({ navigation }) {
       const r = await api.post('/nfce/processar', { url_origem: urlLimpa }, { timeoutMs: 90000 });
       setResultado(r);
     } catch (e) {
-      if (e.status === 409) {
-        setErro('Este cupom já foi cadastrado. Cada nota conta uma vez só.');
-      } else {
-        setErro(e.message || 'Não foi possível processar este cupom.');
-      }
+      tratarFalhaProcessamento(e, 'Não foi possível processar este cupom.');
     } finally {
       setProcessando(false);
     }
@@ -77,11 +116,7 @@ export default function ScanScreen({ navigation }) {
       const r = await api.post('/nfce/processar', { imagem_base64: imagemBase64 }, { timeoutMs: 90000 });
       setResultado(r);
     } catch (e) {
-      if (e.status === 409) {
-        setErro('Este cupom já foi cadastrado. Cada nota conta uma vez só.');
-      } else {
-        setErro(e.message || 'Não foi possível processar esta imagem.');
-      }
+      tratarFalhaProcessamento(e, 'Não foi possível processar esta imagem.');
     } finally {
       setProcessando(false);
     }
@@ -138,6 +173,7 @@ export default function ScanScreen({ navigation }) {
     setLido(false);
     setResultado(null);
     setErro(null);
+    setDuplicado(null);
     setEtapa('');
     setSegundos(0);
   }
@@ -217,6 +253,15 @@ export default function ScanScreen({ navigation }) {
           {erro && !processando && (
             <View style={styles.erroBox}>
               <Text style={styles.erroTexto}>{erro}</Text>
+              {duplicado?.compra_id && (
+                <Pressable
+                  style={styles.abrirNota}
+                  onPress={() => navigation.navigate('Receipt', { id: duplicado.compra_id })}
+                >
+                  <Ionicons name="receipt-outline" size={15} color={colors.white} />
+                  <Text style={styles.abrirNotaTexto}>Abrir notinha salva</Text>
+                </Pressable>
+              )}
               <Pressable onPress={reiniciar}><Text style={styles.tentarNovo}>Tentar de novo</Text></Pressable>
             </View>
           )}
@@ -268,6 +313,8 @@ const styles = StyleSheet.create({
   dica: { fontFamily: fonts.medium, fontSize: 14, color: colors.white, textAlign: 'center', marginTop: 24 },
   erroBox: { backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: radius.md, padding: 14, marginTop: 16, alignItems: 'center' },
   erroTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.white, textAlign: 'center', lineHeight: 19 },
+  abrirNota: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 34, borderRadius: radius.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)', paddingHorizontal: 12, marginTop: 10 },
+  abrirNotaTexto: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.white },
   tentarNovo: { fontFamily: fonts.semibold, fontSize: 14, color: '#5FD698', marginTop: 8 },
   barraBaixo: { flexDirection: 'row', justifyContent: 'center', gap: 48, paddingBottom: 12 },
   controle: { alignItems: 'center', gap: 6 },

@@ -38,9 +38,12 @@ export default function SearchScreen({ route, navigation }) {
   const [quantidade, setQuantidade] = useState(null);
   const [filtros, setFiltros] = useState({ categorias: [], tipos: [], marcas: [], quantidades: [] });
   const [resultados, setResultados] = useState([]);
+  const [sugestoes, setSugestoes] = useState([]);
+  const [carregandoSugestoes, setCarregandoSugestoes] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [buscou, setBuscou] = useState(false);
   const debounce = useRef(null);
+  const debounceSugestoes = useRef(null);
 
   useEffect(() => {
     if (route.params?.categoria) {
@@ -81,6 +84,26 @@ export default function SearchScreen({ route, navigation }) {
     }
   }, [termo, categoria, tipo, marca, quantidade]);
 
+  const carregarSugestoes = useCallback(async () => {
+    const termoLimpo = termo.trim();
+    if (termoLimpo.length < 2) {
+      setSugestoes([]);
+      setCarregandoSugestoes(false);
+      return;
+    }
+
+    setCarregandoSugestoes(true);
+    try {
+      const query = montarQuery({ termo: termoLimpo, categoria, tipo, marca, quantidade }).replace('nome=', 'termo=');
+      const { sugestoes: itens } = await api.get(`/produtos/sugestoes${query}`);
+      setSugestoes(itens || []);
+    } catch (_e) {
+      setSugestoes([]);
+    } finally {
+      setCarregandoSugestoes(false);
+    }
+  }, [termo, categoria, tipo, marca, quantidade]);
+
   useEffect(() => {
     carregarFiltros();
   }, [carregarFiltros]);
@@ -92,6 +115,14 @@ export default function SearchScreen({ route, navigation }) {
       if (debounce.current) clearTimeout(debounce.current);
     };
   }, [buscar]);
+
+  useEffect(() => {
+    if (debounceSugestoes.current) clearTimeout(debounceSugestoes.current);
+    debounceSugestoes.current = setTimeout(carregarSugestoes, 160);
+    return () => {
+      if (debounceSugestoes.current) clearTimeout(debounceSugestoes.current);
+    };
+  }, [carregarSugestoes]);
 
   function selecionarCategoria(valor) {
     setCategoria((atual) => (atual === valor ? null : valor));
@@ -124,7 +155,7 @@ export default function SearchScreen({ route, navigation }) {
   }
 
   const temFiltro = Boolean(termo || categoria || tipo || marca || quantidade);
-  const sugestoes = termo.trim().length >= 2 ? resultados.slice(0, 6) : [];
+  const temSugestoes = termo.trim().length >= 2 && (sugestoes.length > 0 || carregandoSugestoes);
 
   return (
     <View style={[styles.tela, { paddingTop: insets.top + 12 }]}>
@@ -187,15 +218,31 @@ export default function SearchScreen({ route, navigation }) {
         </ScrollView>
       )}
 
-      {sugestoes.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sugestoes}>
-          {sugestoes.map((item) => (
-            <Pressable key={`sug-${item.id}`} style={styles.sugestao} onPress={() => setTermo(item.nome)}>
-              <Ionicons name="search-outline" size={14} color={colors.brandDark} />
-              <Text style={styles.sugestaoTexto} numberOfLines={1}>{item.nome}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+      {temSugestoes && (
+        <View style={styles.sugestoesBox}>
+          <View style={styles.sugestoesTopo}>
+            <Text style={styles.sugestoesTitulo}>Sugestões</Text>
+            {carregandoSugestoes && <ActivityIndicator size="small" color={colors.brand} />}
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sugestoes}>
+            {sugestoes.map((item) => (
+              <Pressable
+                key={`sug-${item.id}`}
+                style={styles.sugestao}
+                onPress={() => {
+                  setTermo(item.nome);
+                  navigation.navigate('Product', { id: item.id, nome: item.nome });
+                }}
+              >
+                <ProductImage uri={item.imagem_url} style={styles.sugestaoImg} iconSize={14} />
+                <View style={{ minWidth: 0 }}>
+                  <Text style={styles.sugestaoTexto} numberOfLines={1}>{item.nome}</Text>
+                  {!!metaTexto(item) && <Text style={styles.sugestaoMeta} numberOfLines={1}>{metaTexto(item)}</Text>}
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
       )}
 
       {carregando ? (
@@ -248,9 +295,14 @@ const styles = StyleSheet.create({
   chipAtivo: { backgroundColor: colors.brandDark, borderColor: colors.brandDark },
   chipTexto: { fontFamily: fonts.medium, fontSize: 12, color: colors.inkSoft },
   chipTextoAtivo: { color: colors.white },
-  sugestoes: { paddingHorizontal: 16, paddingTop: 10, gap: 8 },
-  sugestao: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 230, height: 34, borderRadius: radius.pill, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, paddingHorizontal: 12 },
+  sugestoesBox: { marginTop: 10 },
+  sugestoesTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 },
+  sugestoesTitulo: { fontFamily: fonts.medium, fontSize: 12, color: colors.inkMuted },
+  sugestoes: { paddingHorizontal: 16, gap: 8 },
+  sugestao: { width: 230, minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.md, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, paddingHorizontal: 10, paddingVertical: 8 },
+  sugestaoImg: { width: 32, height: 32, borderRadius: radius.sm, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   sugestaoTexto: { fontFamily: fonts.medium, fontSize: 12, color: colors.brandDark },
+  sugestaoMeta: { fontFamily: fonts.body, fontSize: 10.5, color: colors.inkSoft, marginTop: 1 },
   linha: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 12, marginBottom: 10 },
   linhaImg: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: '#F1F0EA', alignItems: 'center', justifyContent: 'center' },
   linhaNome: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },

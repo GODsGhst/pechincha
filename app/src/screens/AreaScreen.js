@@ -3,8 +3,9 @@
 // backend já mantém em /estabelecimentos/mapa.
 
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Linking, Platform, ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
@@ -32,6 +33,114 @@ function formatarDistancia(km) {
   if (km === null || km === undefined) return 'sem distância';
   if (km < 1) return `${Math.round(km * 1000)} m`;
   return `${km.toFixed(km < 10 ? 1 : 0).replace('.', ',')} km`;
+}
+
+function centroDoMapa(localizacao, lojas) {
+  const centro = localizacao || lojas.find((loja) => loja.localizacao)?.localizacao;
+  if (!centro) return null;
+  return centro;
+}
+
+function zoomPorDistancia(distancia) {
+  if (distancia <= 5) return 12;
+  if (distancia <= 10) return 11;
+  if (distancia <= 20) return 10;
+  return 9;
+}
+
+function htmlMapa({ localizacao, lojas, distancia }) {
+  const centro = centroDoMapa(localizacao, lojas);
+  if (!centro) return null;
+
+  const lojasJson = lojas
+    .filter((loja) => loja.localizacao)
+    .map((loja) => ({
+      id: loja.id,
+      nome: loja.nome,
+      endereco: loja.endereco || '',
+      lat: loja.localizacao.lat,
+      lng: loja.localizacao.lng,
+      distancia: formatarDistancia(loja.distancia_km),
+    }));
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    html, body, #map { height: 100%; margin: 0; padding: 0; background: #eef1ec; }
+    .leaflet-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .popup-title { font-weight: 700; color: #14211c; margin-bottom: 2px; }
+    .popup-sub { color: #5a635c; font-size: 12px; max-width: 180px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const centro = ${JSON.stringify(centro)};
+    const usuario = ${JSON.stringify(localizacao || null)};
+    const lojas = ${JSON.stringify(lojasJson)};
+    const map = L.map('map', { zoomControl: false, attributionControl: false })
+      .setView([centro.lat, centro.lng], ${zoomPorDistancia(distancia)});
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      crossOrigin: true
+    }).addTo(map);
+
+    function esc(valor) {
+      return String(valor || '').replace(/[&<>"']/g, function(ch) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+      });
+    }
+
+    const bounds = [];
+    if (usuario) {
+      L.circle([usuario.lat, usuario.lng], {
+        radius: ${distancia * 1000},
+        color: '#16A35A',
+        weight: 1.5,
+        fillColor: '#16A35A',
+        fillOpacity: 0.12
+      }).addTo(map);
+      L.circleMarker([usuario.lat, usuario.lng], {
+        radius: 8,
+        color: '#ffffff',
+        weight: 3,
+        fillColor: '#16A35A',
+        fillOpacity: 1
+      }).addTo(map).bindPopup('<div class="popup-title">Você</div>');
+      bounds.push([usuario.lat, usuario.lng]);
+    }
+
+    lojas.forEach(function(loja) {
+      const marker = L.circleMarker([loja.lat, loja.lng], {
+        radius: 7,
+        color: '#ffffff',
+        weight: 2,
+        fillColor: '#E06A3B',
+        fillOpacity: 1
+      }).addTo(map);
+      marker.bindPopup(
+        '<div class="popup-title">' + esc(loja.nome) + '</div>' +
+        '<div class="popup-sub">' + esc(loja.endereco || loja.distancia) + '</div>'
+      );
+      marker.on('click', function() {
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'store', id: loja.id }));
+        }
+      });
+      bounds.push([loja.lat, loja.lng]);
+    });
+
+    if (!usuario && bounds.length > 1) {
+      map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
+    }
+  </script>
+</body>
+</html>`;
 }
 
 export default function AreaScreen({ navigation }) {
@@ -64,6 +173,12 @@ export default function AreaScreen({ navigation }) {
         return a.distancia_km - b.distancia_km;
       });
   }, [distancia, lojasComCoordenadas, localizacao]);
+
+  const lojasNoMapa = localizacao ? lojasComDistancia : lojasComCoordenadas;
+  const mapaHtml = useMemo(
+    () => htmlMapa({ localizacao, lojas: lojasNoMapa, distancia }),
+    [localizacao, lojasComCoordenadas, distancia]
+  );
 
   async function buscarLojas() {
     setCarregandoLojas(true);
@@ -143,6 +258,34 @@ export default function AreaScreen({ navigation }) {
     })
       .then(([geo]) => setEndereco(geo || null))
       .catch(() => setEndereco(null));
+  }
+
+  async function abrirRota(loja) {
+    if (!loja?.localizacao) return;
+    const { lat, lng } = loja.localizacao;
+    const nome = encodeURIComponent(loja.nome || 'Estabelecimento');
+    const url = Platform.select({
+      ios: `maps://?q=${nome}&ll=${lat},${lng}`,
+      android: `geo:${lat},${lng}?q=${lat},${lng}(${nome})`,
+      default: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+    });
+
+    try {
+      await Linking.openURL(url);
+    } catch (_e) {
+      setErro('Não consegui abrir o mapa externo neste aparelho.');
+    }
+  }
+
+  function mensagemMapa(event) {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type !== 'store') return;
+      const loja = lojasNoMapa.find((item) => item.id === data.id);
+      if (loja) abrirRota(loja);
+    } catch (_e) {
+      // Ignora mensagens não reconhecidas do mapa.
+    }
   }
 
   useEffect(() => {
@@ -229,19 +372,33 @@ export default function AreaScreen({ navigation }) {
 
         <Text style={[styles.cardLabel, { marginTop: 22 }]}>no mapa</Text>
         <View style={styles.mapa}>
-          <View style={styles.raioExterno}>
-            <View style={styles.raioInterno}>
-              <Ionicons name="location" size={20} color={colors.brand} />
+          {mapaHtml ? (
+            <WebView
+              key={`${localizacao?.lat || 'lojas'}-${distancia}-${lojasNoMapa.length}`}
+              originWhitelist={['*']}
+              source={{ html: mapaHtml }}
+              style={styles.mapaWeb}
+              javaScriptEnabled
+              domStorageEnabled
+              scrollEnabled={false}
+              onMessage={mensagemMapa}
+            />
+          ) : (
+            <View style={styles.mapaVazio}>
+              <Ionicons name="map-outline" size={30} color={colors.inkMuted} />
+              <Text style={styles.mapaNota}>Sem coordenadas para exibir ainda</Text>
             </View>
-          </View>
-          <Text style={styles.mapaNota}>
-            {localizacao
-              ? `${lojasComDistancia.length} ${lojasComDistancia.length === 1 ? 'loja' : 'lojas'} num raio de ${distancia} km`
-              : `${lojasComCoordenadas.length} ${lojasComCoordenadas.length === 1 ? 'loja' : 'lojas'} com mapa`}
-          </Text>
-          {lojasSemCoordenadas > 0 && (
-            <Text style={styles.mapaSubnota}>{lojasSemCoordenadas} sem coordenadas ainda</Text>
           )}
+          <View style={styles.mapaBadge}>
+            <Text style={styles.mapaNota}>
+              {localizacao
+                ? `${lojasComDistancia.length} ${lojasComDistancia.length === 1 ? 'loja' : 'lojas'} em ${distancia} km`
+                : `${lojasComCoordenadas.length} ${lojasComCoordenadas.length === 1 ? 'loja' : 'lojas'} com mapa`}
+            </Text>
+            {lojasSemCoordenadas > 0 && (
+              <Text style={styles.mapaSubnota}>{lojasSemCoordenadas} sem coordenadas</Text>
+            )}
+          </View>
         </View>
 
         <View style={styles.listaTopo}>
@@ -273,6 +430,9 @@ export default function AreaScreen({ navigation }) {
               <View style={styles.lojaDistancia}>
                 <Ionicons name="navigate-outline" size={15} color={colors.brandDark} />
                 <Text style={styles.lojaDistanciaTexto}>{formatarDistancia(loja.distancia_km)}</Text>
+                <Pressable style={styles.rotaBotao} onPress={() => abrirRota(loja)}>
+                  <Text style={styles.rotaTexto}>Rota</Text>
+                </Pressable>
               </View>
             </View>
           ))
@@ -305,11 +465,12 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.brandSoft, borderColor: colors.brandSoftLine },
   chipTexto: { fontFamily: fonts.monoMedium, fontSize: 14, color: colors.inkSoft },
   chipTextoOn: { color: colors.brandDark },
-  mapa: { height: 180, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: '#EEF1EC', alignItems: 'center', justifyContent: 'center', marginTop: 10, gap: 14 },
-  raioExterno: { width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(22,163,90,0.12)', borderWidth: 1.5, borderColor: colors.brand, alignItems: 'center', justifyContent: 'center' },
-  raioInterno: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  mapa: { height: 240, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: '#EEF1EC', marginTop: 10, overflow: 'hidden' },
+  mapaWeb: { ...StyleSheet.absoluteFillObject, backgroundColor: '#EEF1EC' },
+  mapaVazio: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  mapaBadge: { position: 'absolute', left: 10, right: 10, bottom: 10, borderRadius: radius.md, backgroundColor: 'rgba(255,255,255,0.94)', borderWidth: 1, borderColor: colors.line, paddingHorizontal: 10, paddingVertical: 8 },
   mapaNota: { fontFamily: fonts.medium, fontSize: 13, color: colors.inkSoft },
-  mapaSubnota: { fontFamily: fonts.body, fontSize: 11.5, color: colors.inkMuted, marginTop: -8 },
+  mapaSubnota: { fontFamily: fonts.body, fontSize: 11.5, color: colors.inkMuted, marginTop: 2 },
   listaTopo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 18, marginBottom: 10 },
   listaContador: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted },
   vazio: { alignItems: 'center', gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 18 },
@@ -320,4 +481,6 @@ const styles = StyleSheet.create({
   lojaStats: { fontFamily: fonts.body, fontSize: 11.5, color: colors.inkMuted, marginTop: 5 },
   lojaDistancia: { minWidth: 66, alignItems: 'flex-end', gap: 3 },
   lojaDistanciaTexto: { fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.brandDark },
+  rotaBotao: { marginTop: 5, minHeight: 28, borderRadius: radius.sm, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
+  rotaTexto: { fontFamily: fonts.semibold, fontSize: 11.5, color: colors.brandDark },
 });
