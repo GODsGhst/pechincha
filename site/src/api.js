@@ -8,11 +8,16 @@ const cacheGet = new Map();
 const CACHE_MAX = 80;
 
 export function getStoredSession() {
-  const usuario = localStorage.getItem(USER_KEY);
-  return {
-    token: authToken,
-    usuario: usuario ? JSON.parse(usuario) : null
-  };
+  try {
+    const usuario = localStorage.getItem(USER_KEY);
+    return {
+      token: authToken,
+      usuario: usuario ? JSON.parse(usuario) : null
+    };
+  } catch (_error) {
+    clearStoredSession();
+    return { token: null, usuario: null };
+  }
 }
 
 export function setStoredSession(token, usuario) {

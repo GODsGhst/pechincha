@@ -22,7 +22,7 @@ services:
       - key: JWT_EXPIRES_IN
         value: "7d"
       - key: CORS_ORIGIN
-        value: https://pechincha-web.onrender.com,http://localhost:5173,http://127.0.0.1:5173
+        value: https://pechincha-web.onrender.com
   - type: web
     name: pechincha-web
     runtime: static
