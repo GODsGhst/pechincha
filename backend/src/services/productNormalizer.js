@@ -363,8 +363,14 @@ function analisarProduto(nomeBruto, sobrescritas = {}) {
   };
 }
 
+function textoProdutoSalvo(produto) {
+  return [produto.nome_normalizado || produto.nome, produto.quantidade]
+    .filter(Boolean)
+    .join(' ');
+}
+
 function analiseDoProdutoSalvo(produto) {
-  return analisarProduto(produto.nome_normalizado || produto.nome, {
+  return analisarProduto(textoProdutoSalvo(produto), {
     categoria: produto.categoria || null,
     marca: produto.marca || null,
     tipo: produto.tipo || null
@@ -478,6 +484,10 @@ function mesclarProdutosPorId(...listas) {
 
 function chaveDedupDaAnalise(analise) {
   return analise && analise.confiavel ? analise.chave : null;
+}
+
+function erroDuplicidadeMongo(err) {
+  return err && (err.code === 11000 || err.code === 11001);
 }
 
 function criarContextoNormalizacao() {
@@ -643,16 +653,26 @@ async function encontrarOuCriarProduto(nomeBruto, contexto = null) {
     }
   }
 
-  const criado = await Produto.create({
-    nome: nomeExibicao,
-    nome_normalizado: nomeNormalizado,
-    chave_dedup: chaveDedup,
-    categoria: analise.categoria,
-    marca: analise.marca,
-    tipo: analise.tipo,
-    quantidade: analise.quantidade,
-    quantidade_normalizada: analise.quantidade_normalizada
-  });
+  let criado;
+  try {
+    criado = await Produto.create({
+      nome: nomeExibicao,
+      nome_normalizado: nomeNormalizado,
+      chave_dedup: chaveDedup,
+      categoria: analise.categoria,
+      marca: analise.marca,
+      tipo: analise.tipo,
+      quantidade: analise.quantidade,
+      quantidade_normalizada: analise.quantidade_normalizada
+    });
+  } catch (err) {
+    if (!erroDuplicidadeMongo(err) || !chaveDedup) throw err;
+    const existente = await buscarProdutoPorChave(chaveDedup, contexto);
+    if (!existente) throw err;
+    const produto = await enriquecerProduto(existente, analise, nomeExibicao);
+    memorizarProduto(contexto, produto);
+    return { produto, novo: false };
+  }
   memorizarProduto(contexto, criado);
   return { produto: criado, novo: true };
 }

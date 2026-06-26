@@ -110,6 +110,21 @@ function produtoComMetadados(produto) {
   return { ...base, ...metadadosProduto(base) };
 }
 
+function analiseCanonicaProduto(produto) {
+  const base = produtoComMetadados(produto);
+  const texto = [base.nome, base.quantidade].filter(Boolean).join(' ');
+  return productNormalizer.analisarProduto(texto || base.nome || '', {
+    categoria: base.categoria || undefined,
+    tipo: base.tipo || undefined,
+    marca: base.marca || undefined
+  });
+}
+
+function chaveCanonicaProduto(produto) {
+  const analise = analiseCanonicaProduto(produto);
+  return analise.confiavel ? analise.chave : null;
+}
+
 function combinaFiltrosInferidos(produto, filtros, ignorarCampo = null) {
   const efetivos = { ...filtros };
   if (ignorarCampo) delete efetivos[ignorarCampo];
@@ -241,6 +256,120 @@ function formatarProduto(p) {
   };
 }
 
+function dataTimestamp(valor) {
+  if (!valor) return 0;
+  const tempo = new Date(valor).getTime();
+  return Number.isFinite(tempo) ? tempo : 0;
+}
+
+function melhorPorPreco(a, b) {
+  const precoA = Number(a.menor_preco);
+  const precoB = Number(b.menor_preco);
+  const temA = Number.isFinite(precoA);
+  const temB = Number.isFinite(precoB);
+  if (temA && temB && precoA !== precoB) return precoA - precoB;
+  if (temA !== temB) return temA ? -1 : 1;
+  return dataTimestamp(b.ultimo_preco && b.ultimo_preco.data) - dataTimestamp(a.ultimo_preco && a.ultimo_preco.data);
+}
+
+function juntarResultadosDuplicados(produtos) {
+  const grupos = new Map();
+
+  for (const produto of produtos || []) {
+    const chave = chaveCanonicaProduto(produto) || `id:${produto._id || produto.id}`;
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(produto);
+  }
+
+  return [...grupos.values()].map((grupo) => {
+    if (grupo.length === 1) return formatarProduto(grupo[0]);
+
+    const ordenados = [...grupo].sort(melhorPorPreco);
+    const baseProduto = produtoComMetadados(ordenados[0]);
+    const formatados = grupo.map(formatarProduto);
+    const menor = formatados
+      .map((item) => Number(item.menor_preco))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b)[0];
+    const ultimo = formatados
+      .map((item) => item.ultimo_preco)
+      .filter(Boolean)
+      .sort((a, b) => dataTimestamp(b.data) - dataTimestamp(a.data))[0] || null;
+    const imagem = productImageService.imagemDoProduto(baseProduto);
+
+    return {
+      ...formatarProduto(baseProduto),
+      menor_preco: Number.isFinite(menor) ? menor : null,
+      preco_unidade: precoPorMedida(Number.isFinite(menor) ? menor : null, baseProduto),
+      confianca_preco: confiancaPreco(ultimo && ultimo.data),
+      ultimo_preco: ultimo,
+      imagem_url: imagem.url,
+      imagem_credito: imagem.credito,
+      duplicados_mesclados: grupo.length
+    };
+  }).sort((a, b) => melhorPorPreco(a, b));
+}
+
+function melhorLinhaMenorPreco(a, b) {
+  const precoA = Number(a.valor);
+  const precoB = Number(b.valor);
+  const temA = Number.isFinite(precoA);
+  const temB = Number.isFinite(precoB);
+  if (temA && temB && precoA !== precoB) return precoA - precoB;
+  if (temA !== temB) return temA ? -1 : 1;
+  return dataTimestamp(b.data) - dataTimestamp(a.data);
+}
+
+function deduplicarLinhasMenoresPrecos(resultados) {
+  const grupos = new Map();
+
+  for (const resultado of resultados || []) {
+    const chave = chaveCanonicaProduto(resultado.produto) || `id:${resultado._id}`;
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(resultado);
+  }
+
+  return [...grupos.values()]
+    .map((grupo) => {
+      const melhor = [...grupo].sort(melhorLinhaMenorPreco)[0];
+      return { ...melhor, duplicados_mesclados: grupo.length };
+    })
+    .sort(melhorLinhaMenorPreco);
+}
+
+function formatarLinhaMenorPreco(resultado) {
+  const produto = produtoComMetadados(resultado.produto);
+  const imagem = productImageService.imagemDoProduto(produto);
+  const estabelecimento = resultado.estabelecimento || null;
+
+  return {
+    produto_id: resultado._id,
+    produto: displayFormatter.formatarNomeProduto(produto),
+    categoria: produto.categoria,
+    tipo: produto.tipo,
+    marca: produto.marca,
+    quantidade: produto.quantidade,
+    imagem_url: imagem.url,
+    imagem_credito: imagem.credito,
+    valor: resultado.valor,
+    preco_unidade: precoPorMedida(resultado.valor, produto),
+    data: resultado.data,
+    confianca_preco: confiancaPreco(resultado.data),
+    duplicados_mesclados: resultado.duplicados_mesclados,
+    estabelecimento_id: estabelecimento ? estabelecimento._id : null,
+    estabelecimento: estabelecimento ? displayFormatter.formatarNomeEstabelecimento(estabelecimento.nome) : null,
+    localizacao: estabelecimento &&
+      estabelecimento.localizacao &&
+      estabelecimento.localizacao.lat !== undefined &&
+      estabelecimento.localizacao.lat !== null
+      ? {
+          lat: estabelecimento.localizacao.lat,
+          lng: estabelecimento.localizacao.lng
+        }
+      : null
+  };
+}
+
 function compactarHistoricoPreco(historico) {
   const porLocalEValor = new Map();
 
@@ -294,13 +423,15 @@ function formatarAgregadoPreco(r) {
   };
 }
 
-async function estatisticasPreco(produtoId) {
+async function estatisticasPreco(produtoIds) {
+  const ids = Array.isArray(produtoIds) ? produtoIds : [produtoIds];
+  const filtroProduto = { produto_id: { $in: ids } };
   const pesoObservacoes = { $max: [{ $ifNull: ['$observacoes', 1] }, 1] };
   const valorPonderado = { $multiply: ['$valor', pesoObservacoes] };
 
   const [geral, porEstabelecimento] = await Promise.all([
     HistoricoPreco.aggregate([
-      { $match: { produto_id: produtoId } },
+      { $match: filtroProduto },
       {
         $group: {
           _id: null,
@@ -313,7 +444,7 @@ async function estatisticasPreco(produtoId) {
       }
     ]),
     HistoricoPreco.aggregate([
-      { $match: { produto_id: produtoId } },
+      { $match: filtroProduto },
       { $sort: { data: -1 } },
       {
         $group: {
@@ -351,6 +482,43 @@ async function estatisticasPreco(produtoId) {
       ultima_data: r.ultima_data || null
     }))
   };
+}
+
+async function idsProdutosDuplicadosCanonicos(produto) {
+  const chave = chaveCanonicaProduto(produto);
+  if (!chave) return [produto._id];
+
+  const meta = produtoComMetadados(produto);
+  const query = {};
+  if (meta.categoria) query.categoria = regexExato(meta.categoria);
+  if (meta.tipo) query.tipo = regexExato(meta.tipo);
+  if (meta.marca) query.marca = regexExato(meta.marca);
+  if (meta.quantidade_normalizada) query.quantidade_normalizada = meta.quantidade_normalizada;
+
+  const campos = 'nome nome_normalizado chave_dedup categoria tipo marca quantidade quantidade_normalizada menor_preco ultimo_preco criado_em';
+  const consultas = [
+    Produto.find({ chave_dedup: chave }).select(campos).limit(LIMITE_FALLBACK_FILTROS)
+  ];
+
+  if (Object.keys(query).length) {
+    consultas.push(Produto.find(query).select(campos).limit(LIMITE_FALLBACK_FILTROS));
+  }
+
+  // Janela de compatibilidade para produtos antigos, antes de chave_dedup/metadados.
+  consultas.push(
+    Produto.find()
+      .select(campos)
+      .sort({ criado_em: -1 })
+      .limit(LIMITE_FALLBACK_FILTROS)
+  );
+
+  const candidatos = mesclarProdutos(...(await Promise.all(consultas)));
+
+  const ids = candidatos
+    .filter((candidato) => chaveCanonicaProduto(candidato) === chave)
+    .map((candidato) => candidato._id);
+
+  return ids.length > 0 ? ids : [produto._id];
 }
 
 async function buscarProdutosSemNome(filtros) {
@@ -400,7 +568,7 @@ async function listar(req, res, next) {
       produtos = await buscarProdutosSemNome(filtros);
     }
 
-    const payload = { produtos: produtos.map(formatarProduto) };
+    const payload = { produtos: juntarResultadosDuplicados(produtos) };
     salvarCache(cacheKey, payload);
     return res.json(payload);
   } catch (err) {
@@ -456,7 +624,7 @@ async function menores(req, res, next) {
     if (Object.keys(matchProduto).length > 0 && !temFiltros) pipeline.push({ $match: matchProduto });
 
     pipeline.push(
-      { $limit: temFiltros ? Math.min(Math.max(limite * 10, 100), 500) : limite },
+      { $limit: Math.min(Math.max(limite * 10, 100), 500) },
       {
         $lookup: {
           from: 'estabelecimentos',
@@ -470,34 +638,12 @@ async function menores(req, res, next) {
 
     const resultados = await HistoricoPreco.aggregate(pipeline);
     const resultadosFiltrados = temFiltros
-      ? resultados.filter((r) => combinaFiltrosInferidos(r.produto, filtros)).slice(0, limite)
+      ? resultados.filter((r) => combinaFiltrosInferidos(r.produto, filtros))
       : resultados;
+    const resultadosDeduplicados = deduplicarLinhasMenoresPrecos(resultadosFiltrados).slice(0, limite);
 
     const payload = {
-      menores_precos: resultadosFiltrados.map((r) => {
-        const produto = produtoComMetadados(r.produto);
-        const imagem = productImageService.imagemDoProduto(produto);
-        return {
-          produto_id: r._id,
-          produto: displayFormatter.formatarNomeProduto(produto),
-          categoria: produto.categoria,
-          tipo: produto.tipo,
-          marca: produto.marca,
-          quantidade: produto.quantidade,
-          imagem_url: imagem.url,
-          imagem_credito: imagem.credito,
-          valor: r.valor,
-          preco_unidade: precoPorMedida(r.valor, produto),
-          data: r.data,
-          confianca_preco: confiancaPreco(r.data),
-          estabelecimento_id: r.estabelecimento ? r.estabelecimento._id : null,
-          estabelecimento: r.estabelecimento ? displayFormatter.formatarNomeEstabelecimento(r.estabelecimento.nome) : null,
-          localizacao: r.estabelecimento && r.estabelecimento.localizacao &&
-            r.estabelecimento.localizacao.lat !== undefined && r.estabelecimento.localizacao.lat !== null
-            ? { lat: r.estabelecimento.localizacao.lat, lng: r.estabelecimento.localizacao.lng }
-            : null
-        };
-      })
+      menores_precos: resultadosDeduplicados.map(formatarLinhaMenorPreco)
     };
     salvarCache(cacheKey, payload);
     return res.json(payload);
@@ -573,7 +719,7 @@ async function sugestoes(req, res, next) {
     }
 
     const payload = {
-      sugestoes: produtos.slice(0, limite).map(formatarProduto)
+      sugestoes: juntarResultadosDuplicados(produtos).slice(0, limite)
     };
     salvarCache(cacheKey, payload);
     return res.json(payload);
@@ -595,16 +741,28 @@ async function detalhar(req, res, next) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
 
+    const idsCanonicos = await idsProdutosDuplicadosCanonicos(produto);
+    const produtosCanonicos = await Produto.find({ _id: { $in: idsCanonicos } });
     const [historico, estatisticas] = await Promise.all([
-      HistoricoPreco.find({ produto_id: produto._id })
+      HistoricoPreco.find({ produto_id: { $in: idsCanonicos } })
         .sort({ data: -1 })
         .populate('estabelecimento_id', 'nome'),
-      estatisticasPreco(produto._id)
+      estatisticasPreco(idsCanonicos)
     ]);
     const produtoNormalizado = produtoComMetadados(produto);
     const imagem = productImageService.imagemDoProduto(produtoNormalizado);
-    const ultimoPrecoValor = produto.ultimo_preco ? produto.ultimo_preco.valor : null;
-    const ultimoPrecoData = produto.ultimo_preco ? produto.ultimo_preco.data : null;
+    const menorPrecoCanonico = produtosCanonicos
+      .map((p) => Number(p.menor_preco))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b)[0];
+    const ultimoProduto = produtosCanonicos
+      .filter((p) => p.ultimo_preco && p.ultimo_preco.valor !== undefined && p.ultimo_preco.valor !== null)
+      .sort((a, b) => dataTimestamp(b.ultimo_preco.data) - dataTimestamp(a.ultimo_preco.data))[0] || produto;
+    if (ultimoProduto.ultimo_preco && ultimoProduto.ultimo_preco.estabelecimento_id) {
+      await ultimoProduto.populate('ultimo_preco.estabelecimento_id', 'nome');
+    }
+    const ultimoPrecoValor = ultimoProduto.ultimo_preco ? ultimoProduto.ultimo_preco.valor : null;
+    const ultimoPrecoData = ultimoProduto.ultimo_preco ? ultimoProduto.ultimo_preco.data : null;
 
     return res.json({
       id: produto._id,
@@ -615,19 +773,20 @@ async function detalhar(req, res, next) {
       quantidade: produtoNormalizado.quantidade,
       imagem_url: imagem.url,
       imagem_credito: imagem.credito,
-      menor_preco: produto.menor_preco,
-      preco_unidade: precoPorMedida(produto.menor_preco, produtoNormalizado),
+      menor_preco: Number.isFinite(menorPrecoCanonico) ? menorPrecoCanonico : produto.menor_preco,
+      preco_unidade: precoPorMedida(Number.isFinite(menorPrecoCanonico) ? menorPrecoCanonico : produto.menor_preco, produtoNormalizado),
       confianca_preco: confiancaPreco(ultimoPrecoData),
       ultimo_preco: ultimoPrecoValor,
       ultimo_preco_unidade: precoPorMedida(ultimoPrecoValor, produtoNormalizado),
-      ultimo_preco_info: produto.ultimo_preco && produto.ultimo_preco.valor !== undefined && produto.ultimo_preco.valor !== null
+      duplicados_mesclados: idsCanonicos.length,
+      ultimo_preco_info: ultimoProduto.ultimo_preco && ultimoProduto.ultimo_preco.valor !== undefined && ultimoProduto.ultimo_preco.valor !== null
         ? {
-            valor: produto.ultimo_preco.valor,
-            data: produto.ultimo_preco.data,
-            preco_unidade: precoPorMedida(produto.ultimo_preco.valor, produtoNormalizado),
-            confianca_preco: confiancaPreco(produto.ultimo_preco.data),
-            estabelecimento: produto.ultimo_preco.estabelecimento_id
-              ? displayFormatter.formatarNomeEstabelecimento(produto.ultimo_preco.estabelecimento_id.nome)
+            valor: ultimoProduto.ultimo_preco.valor,
+            data: ultimoProduto.ultimo_preco.data,
+            preco_unidade: precoPorMedida(ultimoProduto.ultimo_preco.valor, produtoNormalizado),
+            confianca_preco: confiancaPreco(ultimoProduto.ultimo_preco.data),
+            estabelecimento: ultimoProduto.ultimo_preco.estabelecimento_id
+              ? displayFormatter.formatarNomeEstabelecimento(ultimoProduto.ultimo_preco.estabelecimento_id.nome)
               : null
           }
         : null,

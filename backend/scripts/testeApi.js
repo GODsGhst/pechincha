@@ -99,6 +99,8 @@ async function main() {
   const ListaCompra = require('../src/models/ListaCompra');
   const AdminAuditLog = require('../src/models/AdminAuditLog');
   const compraService = require('../src/services/compraService');
+  const cacheService = require('../src/services/cacheService');
+  const productNormalizer = require('../src/services/productNormalizer');
   await connectDB();
 
   const PORTA = 3210;
@@ -395,6 +397,90 @@ async function main() {
   const atacadao = mapa.json.estabelecimentos.find((e) => e.nome === 'Atacadão XYZ Ltda');
   verificar(atacadao && atacadao.produtos_mais_baratos === 3, 'Atacadão tem o menor preço dos 3 produtos',
     JSON.stringify(atacadao));
+
+  console.log('\n--- Deduplicação canônica de produtos antigos ---');
+  const compraAtacadao = await Compra.findById(nfce2.json.compra_id);
+  const chaveCoca2l = productNormalizer.analisarProduto('COCA COLA 2L').chave;
+  const cocaMercado = await Produto.create({
+    nome: 'Coca-Cola 2L',
+    nome_normalizado: 'coca cola 2l',
+    chave_dedup: chaveCoca2l,
+    categoria: 'Bebidas',
+    tipo: 'Refrigerante',
+    marca: 'Coca-Cola',
+    quantidade: '2L',
+    quantidade_normalizada: '2000ml',
+    menor_preco: 8.99,
+    ultimo_preco: {
+      valor: 8.99,
+      data: new Date('2025-06-06T10:00:00Z'),
+      estabelecimento_id: compraOriginal.estabelecimento_id
+    }
+  });
+  const cocaDuplicadaAntiga = await Produto.create({
+    nome: 'COCACOLA2L',
+    nome_normalizado: 'cocacola2l',
+    chave_dedup: null,
+    categoria: 'Bebidas',
+    tipo: 'Refrigerante',
+    marca: 'Coca-Cola',
+    quantidade: '2L',
+    quantidade_normalizada: '2000ml',
+    menor_preco: 11.99,
+    ultimo_preco: {
+      valor: 11.99,
+      data: new Date('2025-06-07T10:00:00Z'),
+      estabelecimento_id: compraAtacadao.estabelecimento_id
+    }
+  });
+  await HistoricoPreco.create([
+    {
+      produto_id: cocaMercado._id,
+      estabelecimento_id: compraOriginal.estabelecimento_id,
+      compra_id: compraOriginal._id,
+      valor: 8.99,
+      data: new Date('2025-06-06T10:00:00Z')
+    },
+    {
+      produto_id: cocaDuplicadaAntiga._id,
+      estabelecimento_id: compraAtacadao.estabelecimento_id,
+      compra_id: compraAtacadao._id,
+      valor: 11.99,
+      data: new Date('2025-06-07T10:00:00Z')
+    }
+  ]);
+  cacheService.clear('produtos');
+
+  const buscaCoca = await req('GET', '/produtos?nome=coca&categoria=Bebidas');
+  const coca2lBusca = buscaCoca.json.produtos.filter((p) => p.nome === 'Coca-Cola 2L' && p.quantidade === '2L');
+  verificar(buscaCoca.status === 200 && coca2lBusca.length === 1 &&
+    coca2lBusca[0].menor_preco === 8.99 &&
+    coca2lBusca[0].duplicados_mesclados === 2,
+    'busca mescla Coca-Cola 2L duplicada em um único resultado',
+    JSON.stringify(buscaCoca.json));
+
+  const sugestoesCoca = await req('GET', '/produtos/sugestoes?termo=coca&categoria=Bebidas');
+  const coca2lSugestao = sugestoesCoca.json.sugestoes.filter((p) => p.nome === 'Coca-Cola 2L' && p.quantidade === '2L');
+  verificar(sugestoesCoca.status === 200 && coca2lSugestao.length === 1,
+    'sugestões também mesclam Coca-Cola 2L duplicada',
+    JSON.stringify(sugestoesCoca.json));
+
+  const menoresCoca = await req('GET', '/produtos/menores?nome=coca&limite=10');
+  const coca2lMenores = menoresCoca.json.menores_precos.filter((p) => p.produto === 'Coca-Cola 2L' && p.quantidade === '2L');
+  verificar(menoresCoca.status === 200 && coca2lMenores.length === 1 &&
+    coca2lMenores[0].valor === 8.99 &&
+    coca2lMenores[0].duplicados_mesclados === 2,
+    'ranking de menores preços mescla Coca-Cola 2L e preserva menor valor',
+    JSON.stringify(menoresCoca.json));
+
+  const detalheCoca = await req('GET', `/produtos/${cocaDuplicadaAntiga._id}`);
+  verificar(detalheCoca.status === 200 &&
+    detalheCoca.json.duplicados_mesclados === 2 &&
+    detalheCoca.json.menor_preco === 8.99 &&
+    detalheCoca.json.historico.length === 2 &&
+    detalheCoca.json.estatisticas.geral.registros === 2,
+    'detalhe de qualquer duplicado mostra histórico e estatísticas consolidadas',
+    JSON.stringify(detalheCoca.json));
 
   // Por último, para não perturbar as contagens acima (adiciona estabelecimento/produto novos)
   console.log('\n--- Chave de acesso e deduplicação de cupom ---');

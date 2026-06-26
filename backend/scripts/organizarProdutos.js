@@ -57,6 +57,54 @@ async function atualizarProduto(produto, analise) {
   return { mudou, atualizacao };
 }
 
+function textoAnaliseProduto(produto) {
+  return [produto.nome, produto.quantidade].filter(Boolean).join(' ');
+}
+
+function indiceSimplesChaveDedup(index) {
+  return index &&
+    index.key &&
+    Object.keys(index.key).length === 1 &&
+    index.key.chave_dedup === 1;
+}
+
+async function garantirIndiceUnicoChaveDedup() {
+  const nomeIndice = 'uniq_produto_chave_dedup';
+  const indexes = await Produto.collection.indexes();
+  const indiceUnico = indexes.find((index) => indiceSimplesChaveDedup(index) && index.unique);
+
+  if (indiceUnico) {
+    return { status: 'existente', nome: indiceUnico.name };
+  }
+
+  const indiceAntigo = indexes.find((index) => index.name !== '_id_' && indiceSimplesChaveDedup(index));
+  if (!aplicar) {
+    return {
+      status: indiceAntigo ? 'dry-run-recriaria' : 'dry-run-criaria',
+      nome: indiceAntigo ? indiceAntigo.name : nomeIndice
+    };
+  }
+
+  if (indiceAntigo) {
+    await Produto.collection.dropIndex(indiceAntigo.name);
+  }
+
+  await Produto.collection.createIndex(
+    { chave_dedup: 1 },
+    {
+      name: nomeIndice,
+      unique: true,
+      partialFilterExpression: { chave_dedup: { $type: 'string' } },
+      background: true
+    }
+  );
+
+  return {
+    status: indiceAntigo ? 'recriado-como-unico' : 'criado',
+    nome: nomeIndice
+  };
+}
+
 async function mesclarGrupo(grupo) {
   const principal = escolherPrincipal(grupo);
   const duplicados = grupo.filter((item) => String(item.produto._id) !== String(principal.produto._id));
@@ -96,7 +144,7 @@ async function main() {
   const analisados = [];
 
   for (const produto of produtos) {
-    const analise = analisarProduto(produto.nome, {
+    const analise = analisarProduto(textoAnaliseProduto(produto), {
       categoria: produto.categoria || undefined,
       tipo: produto.tipo || undefined,
       marca: produto.marca || undefined
@@ -136,12 +184,15 @@ async function main() {
     });
   }
 
+  const indiceChaveDedup = await garantirIndiceUnicoChaveDedup();
+
   console.log(JSON.stringify({
     modo: aplicar ? 'apply' : 'dry-run',
     produtos_lidos: produtos.length,
     produtos_com_nome_ou_metadados_para_atualizar: atualizados,
     grupos_duplicados_para_mesclar: gruposMesclados,
     produtos_duplicados_para_remover: produtosRemovidos,
+    indice_chave_dedup: indiceChaveDedup,
     exemplos: exemplos.slice(0, 10)
   }, null, 2));
 
