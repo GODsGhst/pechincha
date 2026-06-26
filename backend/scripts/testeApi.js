@@ -275,6 +275,22 @@ async function main() {
     chocolateAoLeite.json.tipo !== 'Leite',
     '"ao leite" não polui categoria Bebidas');
 
+  const hamburguerRezende = await req('POST', '/produtos', { nome: 'HAMBURGUER MISTO REZENDE 56G' }, adminToken);
+  verificar(hamburguerRezende.status === 201 &&
+    hamburguerRezende.json.categoria === 'Açougue' &&
+    hamburguerRezende.json.tipo === 'Hambúrguer' &&
+    hamburguerRezende.json.marca === 'Rezende' &&
+    hamburguerRezende.json.imagem_url.includes('Hamburger_'),
+    'hambúrguer Rezende recebe filtros e imagem remota');
+
+  const bombomArcor = await req('POST', '/produtos', { nome: 'ARCOR BEIJINHO BOMBOM BON 15G' }, adminToken);
+  verificar(bombomArcor.status === 201 &&
+    bombomArcor.json.categoria === 'Alimentos' &&
+    bombomArcor.json.tipo === 'Bombom' &&
+    bombomArcor.json.marca === 'Arcor' &&
+    bombomArcor.json.imagem_url.includes('Chocolate'),
+    'bombom Arcor recebe filtros e imagem remota');
+
   const filtrosBebidas = await req('GET', '/produtos/filtros?categoria=Bebidas');
   verificar(filtrosBebidas.status === 200 &&
     !filtrosBebidas.json.quantidades.includes('42g') &&

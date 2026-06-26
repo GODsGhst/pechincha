@@ -90,6 +90,20 @@ function check(cond, nome) {
   check(analiseLeite.categoria === 'Bebidas' && analiseLeite.tipo === 'Leite' && analiseLeite.quantidade === '1L',
     'leite líquido continua como Bebidas/Leite');
 
+  const analiseHamburguer = analisarProduto('HAMBURGUER MISTO REZENDE 56G');
+  check(analiseHamburguer.categoria === 'Açougue' &&
+    analiseHamburguer.tipo === 'Hambúrguer' &&
+    analiseHamburguer.marca === 'Rezende' &&
+    analiseHamburguer.quantidade === '56g',
+    'hambúrguer Rezende recebe categoria/tipo/marca/tamanho');
+
+  const analiseBombom = analisarProduto('ARCOR BEIJINHO BOMBOM BON 15G');
+  check(analiseBombom.categoria === 'Alimentos' &&
+    analiseBombom.tipo === 'Bombom' &&
+    analiseBombom.marca === 'Arcor' &&
+    analiseBombom.quantidade === '15g',
+    'bombom Arcor recebe categoria/tipo/marca/tamanho');
+
   console.log('\n--- Busca tolerante ---');
   const busca = await buscarProdutos('arroz tio joao');
   check(busca.length >= 1 && busca.some((p) => p.nome.includes('Tio João')),

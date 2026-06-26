@@ -70,6 +70,9 @@ const TIPOS = [
   { tipo: 'Carne', categoria: 'Açougue', aliases: ['carne', 'bovino', 'patinho', 'acem', 'acém', 'alcatra'] },
   { tipo: 'Frango', categoria: 'Açougue', aliases: ['frango', 'peito frango', 'coxa', 'sobrecoxa'] },
   { tipo: 'Linguiça', categoria: 'Açougue', aliases: ['linguica', 'linguiça'] },
+  { tipo: 'Hambúrguer', categoria: 'Açougue', aliases: ['hamburguer', 'hambúrguer', 'burger'] },
+
+  { tipo: 'Bombom', categoria: 'Alimentos', aliases: ['bombom', 'bonbon'] },
 
   { tipo: 'Banana', categoria: 'Hortifruti', aliases: ['banana'] },
   { tipo: 'Tomate', categoria: 'Hortifruti', aliases: ['tomate'] },
@@ -94,6 +97,11 @@ const MARCAS = [
   { marca: 'Yoki', aliases: ['yoki'] },
   { marca: 'Qualitá', aliases: ['qualita', 'qualitá'] },
   { marca: 'Dona Benta', aliases: ['dona benta'] },
+  { marca: 'Arcor', aliases: ['arcor'] },
+  { marca: 'Rezende', aliases: ['rezende'] },
+  { marca: 'Sadia', aliases: ['sadia'] },
+  { marca: 'Seara', aliases: ['seara'] },
+  { marca: 'Perdigão', aliases: ['perdigao', 'perdigão'] },
   { marca: 'Heineken', aliases: ['heineken'] },
   { marca: 'Skol', aliases: ['skol'] },
   { marca: 'Brahma', aliases: ['brahma'] },
