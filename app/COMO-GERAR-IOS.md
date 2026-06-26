@@ -42,7 +42,11 @@ npx eas-cli submit --platform ios --profile production
 
 ## Configuração atual
 
+- Versão do app: `1.0.10`
+- Build iOS: `11`
 - Bundle iOS: `com.consultprice.app`
 - Perfil `preview`: distribuição interna
 - Perfil `production`: App Store/TestFlight
 - Permissões iOS: câmera, fotos e localização
+
+Status desta máquina: `npx eas-cli whoami` retornou `Not logged in`. Faça login no Expo antes de pedir a build iOS.
