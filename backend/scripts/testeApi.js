@@ -163,6 +163,27 @@ async function main() {
   const detalhe = await req('GET', `/produtos/${arroz.id}`);
   verificar(detalhe.status === 200 && detalhe.json.historico.length === 2, 'histórico do arroz tem 2 registros');
 
+  console.log('\n--- Lista sincronizada ---');
+  const listaVazia = await req('GET', '/lista', null, token);
+  verificar(listaVazia.status === 200 && listaVazia.json.itens.length === 0,
+    'lista do usuário começa vazia');
+
+  const listaComArroz = await req('POST', '/lista/itens', { produto_id: arroz.id, quantidade: 2 }, token);
+  verificar(listaComArroz.status === 200 && listaComArroz.json.itens.length === 1,
+    'adiciona produto na lista sincronizada');
+  verificar(listaComArroz.json.itens[0].quantidade === 2 && listaComArroz.json.itens[0].quantidade_produto === '5kg',
+    'lista separa quantidade desejada do tamanho do produto');
+
+  const listaAtualizada = await req('PUT', `/lista/itens/${arroz.id}`, { quantidade: 3, selecionado: false }, token);
+  verificar(listaAtualizada.status === 200 &&
+    listaAtualizada.json.itens[0].quantidade === 3 &&
+    listaAtualizada.json.itens[0].selecionado === false,
+    'atualiza quantidade e seleção do item da lista');
+
+  const listaRemovida = await req('DELETE', `/lista/itens/${arroz.id}`, null, token);
+  verificar(listaRemovida.status === 200 && listaRemovida.json.itens.length === 0,
+    'remove produto da lista sincronizada');
+
   const compraOriginal = await Compra.findById(compraId);
   const produtoArroz = await Produto.findById(arroz.id);
   const totalHistoricoAntes = await HistoricoPreco.countDocuments({ produto_id: produtoArroz._id });

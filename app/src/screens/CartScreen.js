@@ -9,7 +9,14 @@ import { formatBRL } from '../utils/format';
 
 export default function CartScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { itens, remover, alternar } = useCart();
+  const {
+    itens,
+    remover,
+    alternar,
+    alterarQuantidade,
+    carregando: carregandoLista,
+    erro: erroLista
+  } = useCart();
   const [analise, setAnalise] = useState(null);
   const [carregandoAnalise, setCarregandoAnalise] = useState(false);
   const [erroAnalise, setErroAnalise] = useState(null);
@@ -29,6 +36,10 @@ export default function CartScreen({ navigation }) {
   const rodapeLabel = melhorCesta
     ? (melhorCesta.cobertura_completa ? 'Na loja mais barata' : 'Melhor cobertura encontrada')
     : 'Somando os menores preços';
+
+  function metaTexto(item) {
+    return [item.categoria, item.tipo, item.marca, item.quantidade_produto].filter(Boolean).join(' · ');
+  }
 
   const buscarAnalise = useCallback(async () => {
     if (payloadComparacao.length === 0) {
@@ -142,7 +153,17 @@ export default function CartScreen({ navigation }) {
         data={itens}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: 16, paddingTop: 12, paddingBottom: 180 }}
-        ListHeaderComponent={renderAnalise}
+        ListHeaderComponent={
+          <>
+            {erroLista ? (
+              <View style={styles.alertaLista}>
+                <Ionicons name="cloud-offline-outline" size={18} color={colors.location} />
+                <Text style={styles.alertaTexto}>{erroLista}</Text>
+              </View>
+            ) : null}
+            {renderAnalise()}
+          </>
+        }
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Pressable onPress={() => alternar(item.id)} hitSlop={8} accessibilityLabel="Selecionar item">
@@ -155,6 +176,7 @@ export default function CartScreen({ navigation }) {
             <View style={styles.cardImg}><Ionicons name="pricetag-outline" size={20} color={colors.inkMuted} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardNome} numberOfLines={2}>{item.nome}</Text>
+              {!!metaTexto(item) && <Text style={styles.cardMeta} numberOfLines={1}>{metaTexto(item)}</Text>}
               <Text style={styles.cardLabel}>menor preço</Text>
               <Text style={styles.cardPreco}>{formatBRL(item.menor_preco)}</Text>
               <Pressable style={styles.analisar} onPress={() => navigation.navigate('Product', { id: item.id, nome: item.nome })}>
@@ -162,20 +184,47 @@ export default function CartScreen({ navigation }) {
                 <Text style={styles.analisarTexto}>Analisar produto</Text>
               </Pressable>
             </View>
-            <Pressable onPress={() => remover(item.id)} hitSlop={8} accessibilityLabel="Remover">
-              <Ionicons name="trash-outline" size={20} color={colors.location} />
-            </Pressable>
+            <View style={styles.acoesItem}>
+              <View style={styles.stepper}>
+                <Pressable
+                  style={[styles.stepperBotao, Number(item.quantidade) <= 1 && styles.stepperBotaoOff]}
+                  onPress={() => alterarQuantidade(item.id, Number(item.quantidade || 1) - 1)}
+                  disabled={Number(item.quantidade) <= 1}
+                  accessibilityLabel="Diminuir quantidade"
+                >
+                  <Ionicons name="remove" size={15} color={Number(item.quantidade) <= 1 ? colors.inkMuted : colors.brandDark} />
+                </Pressable>
+                <Text style={styles.stepperValor}>{Number(item.quantidade) || 1}x</Text>
+                <Pressable
+                  style={styles.stepperBotao}
+                  onPress={() => alterarQuantidade(item.id, Number(item.quantidade || 1) + 1)}
+                  accessibilityLabel="Aumentar quantidade"
+                >
+                  <Ionicons name="add" size={15} color={colors.brandDark} />
+                </Pressable>
+              </View>
+              <Pressable onPress={() => remover(item.id)} hitSlop={8} accessibilityLabel="Remover" style={styles.removerBotao}>
+                <Ionicons name="trash-outline" size={19} color={colors.location} />
+              </Pressable>
+            </View>
           </View>
         )}
         ListEmptyComponent={
-          <View style={styles.vazio}>
-            <Ionicons name="cart-outline" size={40} color={colors.inkMuted} />
-            <Text style={styles.vazioTitulo}>Sua lista está vazia</Text>
-            <Text style={styles.vazioTexto}>Busque um produto e toque em “Adicionar à lista” para acompanhar o melhor preço.</Text>
-            <Pressable style={styles.vazioBotao} onPress={() => navigation.navigate('Buscar')}>
-              <Text style={styles.vazioBotaoTexto}>Buscar produtos</Text>
-            </Pressable>
-          </View>
+          carregandoLista ? (
+            <View style={styles.vazio}>
+              <ActivityIndicator color={colors.brand} />
+              <Text style={styles.vazioTexto}>Carregando sua lista.</Text>
+            </View>
+          ) : (
+            <View style={styles.vazio}>
+              <Ionicons name="cart-outline" size={40} color={colors.inkMuted} />
+              <Text style={styles.vazioTitulo}>Sua lista está vazia</Text>
+              <Text style={styles.vazioTexto}>Busque um produto e toque em “Adicionar à lista” para acompanhar o melhor preço.</Text>
+              <Pressable style={styles.vazioBotao} onPress={() => navigation.navigate('Buscar')}>
+                <Text style={styles.vazioBotaoTexto}>Buscar produtos</Text>
+              </Pressable>
+            </View>
+          )
         }
       />
 
@@ -217,13 +266,22 @@ const styles = StyleSheet.create({
   rankingLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   rankingNome: { flex: 1, fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft },
   rankingPreco: { fontFamily: fonts.monoMedium, fontSize: 12, color: colors.ink },
+  alertaLista: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF2EC', borderWidth: 1, borderColor: '#FFD4C4', borderRadius: radius.md, padding: 10, marginBottom: 10 },
+  alertaTexto: { flex: 1, fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft },
   card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 12, marginBottom: 10 },
   cardImg: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: '#F1F0EA', alignItems: 'center', justifyContent: 'center' },
   cardNome: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink },
+  cardMeta: { fontFamily: fonts.body, fontSize: 11, color: colors.brandDark, marginTop: 2 },
   cardLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, textTransform: 'uppercase', marginTop: 4 },
   cardPreco: { fontFamily: fonts.monoMedium, fontSize: 15, color: colors.brand },
   analisar: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
   analisarTexto: { fontFamily: fonts.semibold, fontSize: 12, color: colors.brand },
+  acoesItem: { alignItems: 'flex-end', gap: 9 },
+  stepper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, backgroundColor: colors.canvas, height: 32 },
+  stepperBotao: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  stepperBotaoOff: { opacity: 0.45 },
+  stepperValor: { minWidth: 28, textAlign: 'center', fontFamily: fonts.monoMedium, fontSize: 12, color: colors.ink },
+  removerBotao: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   vazio: { alignItems: 'center', gap: 8, marginTop: 60, paddingHorizontal: 32 },
   vazioTitulo: { fontFamily: fonts.semibold, fontSize: 16, color: colors.ink, marginTop: 4 },
   vazioTexto: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, textAlign: 'center', lineHeight: 19 },
