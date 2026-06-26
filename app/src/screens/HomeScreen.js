@@ -16,6 +16,7 @@ const CATEGORIAS = [
   { nome: 'Limpeza', icone: 'sparkles-outline' },
   { nome: 'Higiene', icone: 'water-outline' },
   { nome: 'Açougue', icone: 'restaurant-outline' },
+  { nome: 'Hortifruti', icone: 'leaf-outline' },
 ];
 
 export default function HomeScreen({ navigation }) {
@@ -75,7 +76,7 @@ export default function HomeScreen({ navigation }) {
           </Text>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 18 }} contentContainerStyle={{ gap: 12 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 18 }} contentContainerStyle={{ gap: 12, paddingRight: 2 }}>
           {CATEGORIAS.map((c) => (
             <Pressable key={c.nome} style={styles.categoria} onPress={() => navigation.navigate('Buscar', { categoria: c.nome })}>
               <View style={styles.categoriaIcone}><Ionicons name={c.icone} size={22} color={colors.brandDark} /></View>

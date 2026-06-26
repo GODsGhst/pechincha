@@ -3,7 +3,7 @@
 // backend já mantém em /estabelecimentos/mapa.
 
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, ScrollView, View, Text, Pressable, StyleSheet, TextInput } from 'react-native';
+import { ActivityIndicator, Linking, Platform, RefreshControl, ScrollView, View, Text, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
@@ -173,6 +173,7 @@ export default function AreaScreen({ navigation }) {
   const [carregandoGps, setCarregandoGps] = useState(false);
   const [carregandoBuscaLocal, setCarregandoBuscaLocal] = useState(false);
   const [carregandoLojas, setCarregandoLojas] = useState(false);
+  const [atualizando, setAtualizando] = useState(false);
   const [erro, setErro] = useState(null);
   const [buscaLocal, setBuscaLocal] = useState('');
 
@@ -202,18 +203,24 @@ export default function AreaScreen({ navigation }) {
     [localizacao, lojasNoMapa, distancia]
   );
 
-  async function buscarLojas() {
+  async function buscarLojas(manual = false) {
     setCarregandoLojas(true);
+    if (manual) setAtualizando(true);
     try {
       const query = localizacao
         ? `?lat=${encodeURIComponent(localizacao.lat)}&lng=${encodeURIComponent(localizacao.lng)}&raio=${encodeURIComponent(distancia)}`
         : '';
-      const res = await api.get(`/estabelecimentos/mapa${query}`);
+      const res = await api.get(`/estabelecimentos/mapa${query}`, {
+        cacheMs: 30000,
+        forceRefresh: manual,
+        timeoutMs: 20000
+      });
       setEstabelecimentos(res.estabelecimentos || []);
     } catch (_e) {
       setErro('Não foi possível carregar as lojas próximas.');
     } finally {
       setCarregandoLojas(false);
+      if (manual) setAtualizando(false);
     }
   }
 
@@ -378,7 +385,11 @@ export default function AreaScreen({ navigation }) {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 28 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={atualizando} onRefresh={() => buscarLojas(true)} tintColor={colors.brand} />}
+      >
         <View style={styles.tituloLinha}>
           <Text style={styles.titulo}>Onde buscar</Text>
           <Ionicons name="location" size={20} color={colors.brand} />
@@ -401,7 +412,7 @@ export default function AreaScreen({ navigation }) {
               </>
             )}
           </Pressable>
-          <Pressable style={styles.botaoG} onPress={buscarLojas} disabled={carregandoLojas}>
+          <Pressable style={styles.botaoG} onPress={() => buscarLojas(true)} disabled={carregandoLojas}>
             {carregandoLojas ? (
               <ActivityIndicator size="small" color={colors.white} />
             ) : (
