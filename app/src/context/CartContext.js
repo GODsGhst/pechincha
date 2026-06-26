@@ -18,7 +18,7 @@ export function CartProvider({ children }) {
     return lista;
   }
 
-  async function carregarLista() {
+  async function carregarLista(manual = false) {
     if (!usuario) {
       setItens([]);
       setCarregando(false);
@@ -28,10 +28,12 @@ export function CartProvider({ children }) {
     setCarregando(true);
     setErro(null);
     try {
-      return aplicarLista(await api.get('/lista'));
+      return aplicarLista(await api.get('/lista', {
+        cacheMs: 30000,
+        forceRefresh: manual
+      }));
     } catch (_e) {
       setErro('Não foi possível carregar sua lista.');
-      setItens([]);
       return null;
     } finally {
       setCarregando(false);

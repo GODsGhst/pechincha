@@ -68,7 +68,8 @@ export default function CartScreen({ navigation }) {
   }, [payloadComparacao]);
 
   useEffect(() => {
-    buscarAnalise();
+    const timer = setTimeout(buscarAnalise, 250);
+    return () => clearTimeout(timer);
   }, [buscarAnalise]);
 
   function renderAnalise() {
@@ -159,7 +160,7 @@ export default function CartScreen({ navigation }) {
         data={itens}
         keyExtractor={(item) => item.id}
         refreshing={carregandoLista}
-        onRefresh={carregarLista}
+        onRefresh={() => carregarLista(true)}
         contentContainerStyle={{ padding: 16, paddingTop: 12, paddingBottom: 180 }}
         ListHeaderComponent={
           <>
