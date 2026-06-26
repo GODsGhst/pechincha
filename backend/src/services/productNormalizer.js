@@ -160,8 +160,19 @@ function detectarPrimeiro(texto, lista) {
   return lista.find((entrada) => entrada.aliases.some((alias) => contemAlias(texto, alias))) || null;
 }
 
+function tipoDetectadoValido(texto, tipoInfo) {
+  if (!tipoInfo) return null;
+
+  if (tipoInfo.tipo === 'Leite') {
+    if (!/\bleite\b/.test(texto)) return null;
+    if (/\bao leite\b/.test(texto)) return null;
+  }
+
+  return tipoInfo;
+}
+
 function detectarCategoria(texto) {
-  const porTipo = detectarPrimeiro(texto, TIPOS);
+  const porTipo = tipoDetectadoValido(texto, detectarPrimeiro(texto, TIPOS));
   if (porTipo) return porTipo.categoria;
   const porCategoria = detectarPrimeiro(texto, CATEGORIAS);
   return porCategoria ? porCategoria.categoria : null;
@@ -269,6 +280,11 @@ function montarExtras(tokens, marcaInfo, tipoInfo) {
     ...CATEGORIAS.flatMap((c) => c.aliases.flatMap((a) => tokenizar(a)))
   ]);
 
+  if (tokens.includes('ao') && tokens.includes('leite')) {
+    ignorar.add('ao');
+    ignorar.add('leite');
+  }
+
   return [...new Set(tokens)]
     .filter((token) => !ignorar.has(token))
     .filter((token) => !TOKENS_GENERICOS.has(token))
@@ -308,7 +324,7 @@ function analisarProduto(nomeBruto, sobrescritas = {}) {
   const comparavel = prepararTextoComparacao(nome);
   const tokens = tokenizar(comparavel);
   const marcaInfo = detectarPrimeiro(comparavel, MARCAS);
-  let tipoInfo = detectarPrimeiro(comparavel, TIPOS);
+  let tipoInfo = tipoDetectadoValido(comparavel, detectarPrimeiro(comparavel, TIPOS));
 
   if (!tipoInfo && marcaInfo && ['Coca-Cola', 'Pepsi', 'Fanta', 'Sprite', 'Guaraná Antarctica'].includes(marcaInfo.marca)) {
     tipoInfo = TIPOS.find((entrada) => entrada.tipo === 'Refrigerante');

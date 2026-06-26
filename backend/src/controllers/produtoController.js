@@ -84,15 +84,19 @@ function plano(produto) {
 function metadadosProduto(produto) {
   const base = plano(produto);
   const texto = [base.nome, base.quantidade].filter(Boolean).join(' ');
-  const analise = productNormalizer.analisarProduto(texto || base.nome || '', {
-    categoria: base.categoria || undefined,
-    tipo: base.tipo || undefined,
-    marca: base.marca || undefined
-  });
+  const analiseInferida = productNormalizer.analisarProduto(texto || base.nome || '');
+  const tipoSalvoSuspeito = textoIgual(base.tipo, 'Leite') && !textoIgual(analiseInferida.tipo, 'Leite');
+  const analise = tipoSalvoSuspeito
+    ? analiseInferida
+    : productNormalizer.analisarProduto(texto || base.nome || '', {
+        categoria: base.categoria || undefined,
+        tipo: base.tipo || undefined,
+        marca: base.marca || undefined
+      });
 
   return {
-    categoria: base.categoria || analise.categoria || null,
-    tipo: base.tipo || analise.tipo || null,
+    categoria: tipoSalvoSuspeito ? (analise.categoria || null) : (base.categoria || analise.categoria || null),
+    tipo: tipoSalvoSuspeito ? (analise.tipo || null) : (base.tipo || analise.tipo || null),
     marca: base.marca || analise.marca || null,
     quantidade: base.quantidade || analise.quantidade || null,
     quantidade_normalizada: base.quantidade_normalizada || analise.quantidade_normalizada || null
@@ -107,7 +111,9 @@ function produtoComMetadados(produto) {
 function combinaFiltrosInferidos(produto, filtros, ignorarCampo = null) {
   const efetivos = { ...filtros };
   if (ignorarCampo) delete efetivos[ignorarCampo];
-  return productNormalizer.analiseCombinaFiltros(metadadosProduto(produto), efetivos);
+  const meta = metadadosProduto(produto);
+  return productNormalizer.analiseCombinaFiltros(meta, efetivos) &&
+    quantidadeCompativelComCategoria(meta, efetivos);
 }
 
 function ordenarTexto(lista) {
@@ -117,6 +123,14 @@ function ordenarTexto(lista) {
 
 function textoIgual(a, b) {
   return productNormalizer.normalizarTexto(a || '') === productNormalizer.normalizarTexto(b || '');
+}
+
+function quantidadeCompativelComCategoria(meta, filtros = {}) {
+  const categoria = filtros.categoria || meta.categoria;
+  if (textoIgual(categoria, 'Bebidas')) {
+    return !meta.quantidade_normalizada || meta.quantidade_normalizada.endsWith('ml');
+  }
+  return true;
 }
 
 function mesclarProdutos(...listas) {
@@ -455,6 +469,7 @@ async function filtros(req, res, next) {
 
     const quantidades = ordenarTexto(metas
       .filter((meta) => combinaFiltrosInferidos(meta, filtrosAtuais, 'quantidade'))
+      .filter((meta) => meta.quantidade && quantidadeCompativelComCategoria(meta, filtrosAtuais))
       .map((meta) => meta.quantidade));
 
     const payload = { categorias, tipos, marcas, quantidades };

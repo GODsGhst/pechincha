@@ -80,6 +80,16 @@ function check(cond, nome) {
   check(formatarNomeProduto('ALUM BRILHALUMINIO LIMP TRAD 500ML') === 'Brilhalumínio Tradicional 500ml',
     'limpa alumínio fica com nome legível');
 
+  const analiseChocolate = analisarProduto('NESTLE AO LEITE CHOC KITKAT 42G');
+  check(analiseChocolate.categoria !== 'Bebidas' && analiseChocolate.tipo !== 'Leite',
+    '"ao leite" não é classificado como bebida/leite');
+  check(formatarNomeProduto('NESTLE AO LEITE CHOC KITKAT 42G') === 'Nestlé Choc Kitkat 42g',
+    '"ao leite" não volta como extra no nome formatado');
+
+  const analiseLeite = analisarProduto('LEITE ITAMBE INTEGRAL 1L');
+  check(analiseLeite.categoria === 'Bebidas' && analiseLeite.tipo === 'Leite' && analiseLeite.quantidade === '1L',
+    'leite líquido continua como Bebidas/Leite');
+
   console.log('\n--- Busca tolerante ---');
   const busca = await buscarProdutos('arroz tio joao');
   check(busca.length >= 1 && busca.some((p) => p.nome.includes('Tio João')),

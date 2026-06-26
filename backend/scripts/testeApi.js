@@ -205,7 +205,7 @@ async function main() {
   verificar(arroz.categoria === 'Alimentos' && arroz.tipo === 'Arroz' && arroz.marca === 'Tio João',
     'produto retorna categoria/tipo/marca');
   verificar(arroz.quantidade === '5kg', 'produto retorna quantidade/tamanho');
-  verificar(typeof arroz.imagem_url === 'string' && arroz.imagem_url.includes('Golden%20Rice'),
+  verificar(typeof arroz.imagem_url === 'string' && arroz.imagem_url.includes('Golden_Rice'),
     'produto retorna imagem pública quando conhecida');
 
   const adminAtualizaProduto = await req('PUT', `/produtos/${arroz.id}`, {
@@ -227,6 +227,18 @@ async function main() {
   const filtrosProdutos = await req('GET', '/produtos/filtros?categoria=Alimentos');
   verificar(filtrosProdutos.status === 200 && filtrosProdutos.json.tipos.includes('Arroz') && filtrosProdutos.json.quantidades.includes('5kg'),
     'endpoint de filtros retorna tipos e quantidades');
+
+  const chocolateAoLeite = await req('POST', '/produtos', { nome: 'NESTLE AO LEITE CHOC KITKAT 42G' }, adminToken);
+  verificar(chocolateAoLeite.status === 201 &&
+    chocolateAoLeite.json.categoria !== 'Bebidas' &&
+    chocolateAoLeite.json.tipo !== 'Leite',
+    '"ao leite" não polui categoria Bebidas');
+
+  const filtrosBebidas = await req('GET', '/produtos/filtros?categoria=Bebidas');
+  verificar(filtrosBebidas.status === 200 &&
+    !filtrosBebidas.json.quantidades.includes('42g') &&
+    !filtrosBebidas.json.marcas.includes('Nestlé'),
+    'filtros de Bebidas não mostram marcas/tamanhos de chocolate em gramas');
 
   const detalhe = await req('GET', `/produtos/${arroz.id}`);
   verificar(detalhe.status === 200 && detalhe.json.historico.length === 2, 'histórico do arroz tem 2 registros');

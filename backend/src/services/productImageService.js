@@ -1,52 +1,50 @@
 // Resolve imagens publicas para produtos conhecidos. O campo salvo no banco
 // sempre tem prioridade; este fallback evita criar um banco de imagens agora.
 
-const COMMONS_FILE = 'https://commons.wikimedia.org/wiki/Special:FilePath/';
-
 const IMAGENS = [
   {
     marca: 'Coca-Cola',
-    url: `${COMMONS_FILE}Olympic%20Coca%20Cola%20Bottle.png?width=640`,
+    url: 'https://upload.wikimedia.org/wikipedia/commons/c/c3/Olympic_Coca_Cola_Bottle.png',
     credito: 'Wikimedia Commons'
   },
   {
     tipo: 'Detergente',
-    url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Laundry_detergents.jpg/960px-Laundry_detergents.jpg',
     credito: 'Wikimedia Commons'
   },
   {
     tipo: 'Amaciante',
-    url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Laundry_detergents.jpg/960px-Laundry_detergents.jpg',
     credito: 'Wikimedia Commons'
   },
   {
     tipo: 'Limpa alumínio',
-    url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Laundry_detergents.jpg/960px-Laundry_detergents.jpg',
     credito: 'Wikimedia Commons'
   },
   {
     tipo: 'Limpador',
-    url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Laundry_detergents.jpg/960px-Laundry_detergents.jpg',
     credito: 'Wikimedia Commons'
   },
   {
     tipo: 'Desinfetante',
-    url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Laundry_detergents.jpg/960px-Laundry_detergents.jpg',
     credito: 'Wikimedia Commons'
   },
   {
     tipo: 'Água sanitária',
-    url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Laundry_detergents.jpg/960px-Laundry_detergents.jpg',
     credito: 'Wikimedia Commons'
   },
   {
     tipo: 'Sabão',
-    url: `${COMMONS_FILE}Laundry%20detergents.jpg?width=640`,
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Laundry_detergents.jpg/960px-Laundry_detergents.jpg',
     credito: 'Wikimedia Commons'
   },
   {
     tipo: 'Arroz',
-    url: `${COMMONS_FILE}Golden%20Rice.jpg?width=640`,
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/Golden_Rice.jpg/960px-Golden_Rice.jpg',
     credito: 'Wikimedia Commons'
   },
   {

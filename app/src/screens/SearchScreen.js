@@ -89,6 +89,7 @@ export default function SearchScreen({ route, navigation }) {
   const [sugestoes, setSugestoes] = useState([]);
   const [carregando, setCarregando] = useState(false);
   const [buscou, setBuscou] = useState(false);
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const debounce = useRef(null);
   const requisicaoBusca = useRef(0);
   const requisicaoFiltros = useRef(0);
@@ -224,6 +225,10 @@ export default function SearchScreen({ route, navigation }) {
 
   const temFiltro = Boolean(termo || categoria || tipo || marca || quantidade);
   const temSugestoes = termo.trim().length >= 2 && sugestoes.length > 0;
+  const filtrosSelecionados = [categoria, tipo, marca, quantidade].filter(Boolean);
+  const resumoFiltros = filtrosSelecionados.length > 0
+    ? filtrosSelecionados.join(' · ')
+    : 'Categoria, tipo, marca e tamanho';
 
   return (
     <View style={[styles.tela, { paddingTop: insets.top + 12 }]}>
@@ -256,14 +261,26 @@ export default function SearchScreen({ route, navigation }) {
       </View>
 
       <View style={styles.filtrosBox}>
-        <View style={styles.filtrosHeader}>
-          <Text style={styles.filtrosLabel}>Filtros</Text>
-          {!!categoria && <Text style={styles.filtrosAtivo} numberOfLines={1}>{categoria}</Text>}
-        </View>
-        <FilterRow titulo="Categoria" itens={categoriasDisponiveis} ativo={categoria} onSelect={selecionarCategoria} />
-        <FilterRow titulo="Tipo" itens={filtros.tipos} ativo={tipo} onSelect={selecionarTipo} />
-        <FilterRow titulo="Marca" itens={filtros.marcas} ativo={marca} onSelect={selecionarMarca} />
-        <FilterRow titulo="Tamanho" itens={filtros.quantidades} ativo={quantidade} onSelect={selecionarQuantidade} />
+        <Pressable style={styles.filtrosToggle} onPress={() => setFiltrosAbertos((atual) => !atual)}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.filtrosLabel}>Filtros</Text>
+            <Text style={styles.filtrosResumo} numberOfLines={1}>{resumoFiltros}</Text>
+          </View>
+          {filtrosSelecionados.length > 0 && (
+            <View style={styles.filtrosBadge}>
+              <Text style={styles.filtrosBadgeTexto}>{filtrosSelecionados.length}</Text>
+            </View>
+          )}
+          <Ionicons name={filtrosAbertos ? 'chevron-up' : 'chevron-down'} size={18} color={colors.inkSoft} />
+        </Pressable>
+        {filtrosAbertos && (
+          <View style={styles.filtrosConteudo}>
+            <FilterRow titulo="Categoria" itens={categoriasDisponiveis} ativo={categoria} onSelect={selecionarCategoria} />
+            <FilterRow titulo="Tipo" itens={filtros.tipos} ativo={tipo} onSelect={selecionarTipo} />
+            <FilterRow titulo="Marca" itens={filtros.marcas} ativo={marca} onSelect={selecionarMarca} />
+            <FilterRow titulo="Tamanho" itens={filtros.quantidades} ativo={quantidade} onSelect={selecionarQuantidade} />
+          </View>
+        )}
       </View>
 
       {temSugestoes && (
@@ -331,10 +348,13 @@ const styles = StyleSheet.create({
   limpar: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   campo: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 12, height: 48, marginHorizontal: 16, marginTop: 12 },
   input: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.ink },
-  filtrosBox: { paddingTop: 12 },
-  filtrosHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 6 },
+  filtrosBox: { paddingTop: 10, paddingHorizontal: 16 },
+  filtrosToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8 },
   filtrosLabel: { fontFamily: fonts.semibold, fontSize: 12, color: colors.ink },
-  filtrosAtivo: { flexShrink: 1, marginLeft: 12, fontFamily: fonts.medium, fontSize: 11, color: colors.brandDark },
+  filtrosResumo: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted, marginTop: 2 },
+  filtrosBadge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, alignItems: 'center', justifyContent: 'center' },
+  filtrosBadgeTexto: { fontFamily: fonts.semibold, fontSize: 11, color: colors.brandDark },
+  filtrosConteudo: { paddingTop: 10, marginHorizontal: -16 },
   filtroLinha: { marginBottom: 8 },
   filtroTitulo: { fontFamily: fonts.body, fontSize: 10.5, color: colors.inkMuted, paddingHorizontal: 16, marginBottom: 6 },
   chips: { paddingHorizontal: 16, gap: 8 },
