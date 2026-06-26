@@ -4,6 +4,16 @@ export function formatBRL(valor) {
   return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+export function formatPrecoUnidade(preco) {
+  if (!preco || preco.valor === null || preco.valor === undefined || !preco.unidade) return '';
+  return `${formatBRL(preco.valor)}/${preco.unidade}`;
+}
+
+export function rotuloConfiancaPreco(confianca) {
+  if (!confianca || !confianca.rotulo || confianca.nivel === 'sem_data') return '';
+  return confianca.rotulo;
+}
+
 // "há 2 h", "há 3 d" a partir de uma data ISO.
 export function tempoRelativo(dataIso) {
   if (!dataIso) return '';

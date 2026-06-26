@@ -3,6 +3,7 @@ const ListaCompra = require('../models/ListaCompra');
 const Produto = require('../models/Produto');
 const productImageService = require('../services/productImageService');
 const displayFormatter = require('../services/displayFormatter');
+const { precoPorMedida, confiancaPreco } = require('../services/pricePresentationService');
 
 function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -23,7 +24,7 @@ function quantidadeValida(valor) {
 function populateLista(queryOuDoc) {
   return queryOuDoc.populate({
     path: 'itens.produto_id',
-    select: 'nome categoria tipo marca quantidade imagem_url imagem_credito menor_preco ultimo_preco'
+    select: 'nome categoria tipo marca quantidade quantidade_normalizada imagem_url imagem_credito menor_preco ultimo_preco'
   });
 }
 
@@ -43,10 +44,14 @@ function formatarItem(item) {
     imagem_url: imagem.url,
     imagem_credito: imagem.credito,
     menor_preco: produto.menor_preco,
+    preco_unidade: precoPorMedida(produto.menor_preco, produto),
+    confianca_preco: confiancaPreco(produto.ultimo_preco && produto.ultimo_preco.data),
     ultimo_preco: produto.ultimo_preco && produto.ultimo_preco.valor !== undefined && produto.ultimo_preco.valor !== null
       ? {
           valor: produto.ultimo_preco.valor,
           data: produto.ultimo_preco.data,
+          preco_unidade: precoPorMedida(produto.ultimo_preco.valor, produto),
+          confianca_preco: confiancaPreco(produto.ultimo_preco.data),
           estabelecimento_id: produto.ultimo_preco.estabelecimento_id || null
         }
       : null,

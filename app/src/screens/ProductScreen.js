@@ -6,7 +6,7 @@ import { api } from '../api/client';
 import ProductImage from '../components/ProductImage';
 import { useCart } from '../context/CartContext';
 import { colors, fonts, radius } from '../theme';
-import { formatBRL, tempoRelativo } from '../utils/format';
+import { formatBRL, formatPrecoUnidade, rotuloConfiancaPreco, tempoRelativo } from '../utils/format';
 
 function dataCurta(data) {
   const d = new Date(data);
@@ -74,6 +74,8 @@ export default function ProductScreen({ route, navigation }) {
   const estatisticaGeral = produto?.estatisticas?.geral || {};
   const mediasPorLocal = produto?.estatisticas?.por_estabelecimento || [];
   const ultimoPrecoInfo = produto?.ultimo_preco_info || null;
+  const precoUnidade = formatPrecoUnidade(produto?.preco_unidade);
+  const frescorPreco = rotuloConfiancaPreco(produto?.confianca_preco || ultimoPrecoInfo?.confianca_preco);
 
   useEffect(() => {
     (async () => {
@@ -116,6 +118,7 @@ export default function ProductScreen({ route, navigation }) {
           <View style={styles.bannerPreco}>
             <Text style={styles.bannerLabel}>melhor preço encontrado</Text>
             <Text style={styles.bannerValor}>{formatBRL(produto.menor_preco)}</Text>
+            {!!precoUnidade && <Text style={styles.bannerUnidade}>equivale a {precoUnidade}</Text>}
           </View>
 
           <View style={styles.confiancaBox}>
@@ -123,7 +126,9 @@ export default function ProductScreen({ route, navigation }) {
               <Ionicons name="receipt-outline" size={18} color={colors.brandDark} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.confiancaTitulo}>Preço vindo de cupom fiscal</Text>
+              <Text style={styles.confiancaTitulo}>
+                Preço vindo de cupom fiscal{frescorPreco ? ` · ${frescorPreco}` : ''}
+              </Text>
               <Text style={styles.confiancaTexto}>
                 {ultimoPrecoInfo
                   ? `Último registro: ${formatBRL(ultimoPrecoInfo.valor)}${ultimoPrecoInfo.estabelecimento ? ` em ${ultimoPrecoInfo.estabelecimento}` : ''}${ultimoPrecoInfo.data ? ` · ${tempoRelativo(ultimoPrecoInfo.data)}` : ''}.`
@@ -153,7 +158,13 @@ export default function ProductScreen({ route, navigation }) {
 
           <Pressable
             style={[styles.botaoLista, naLista && styles.botaoListaOn]}
-            onPress={() => adicionar({ id, nome: produto.nome, menor_preco: produto.menor_preco })}
+            onPress={() => adicionar({
+              id,
+              nome: produto.nome,
+              menor_preco: produto.menor_preco,
+              preco_unidade: produto.preco_unidade,
+              imagem_url: produto.imagem_url
+            })}
             disabled={naLista}
           >
             <Ionicons name={naLista ? 'checkmark' : 'cart-outline'} size={18} color={naLista ? colors.brand : colors.white} />
@@ -241,6 +252,7 @@ const styles = StyleSheet.create({
   bannerPreco: { backgroundColor: colors.brandDark, borderRadius: radius.lg, padding: 16, marginTop: 12 },
   bannerLabel: { fontFamily: fonts.body, fontSize: 11, color: '#9FD9BC' },
   bannerValor: { fontFamily: fonts.monoMedium, fontSize: 28, color: colors.white, marginTop: 2 },
+  bannerUnidade: { fontFamily: fonts.medium, fontSize: 12, color: '#BFE8D2', marginTop: 2 },
   confiancaBox: { flexDirection: 'row', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 12, marginTop: 12 },
   confiancaIcone: { width: 36, height: 36, borderRadius: radius.md, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   confiancaTitulo: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },

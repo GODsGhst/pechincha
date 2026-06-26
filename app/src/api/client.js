@@ -33,11 +33,40 @@ if (__DEV__) {
 }
 
 let authToken = null;
+const cacheGet = new Map();
+const CACHE_MAX = 80;
+
 export function setAuthToken(token) {
   authToken = token;
 }
 
+function obterCacheGet(chave) {
+  const item = cacheGet.get(chave);
+  if (!item) return null;
+  if (Date.now() > item.expiraEm) {
+    cacheGet.delete(chave);
+    return null;
+  }
+  return item.valor;
+}
+
+function salvarCacheGet(chave, valor, cacheMs) {
+  if (!cacheMs) return;
+  if (cacheGet.size >= CACHE_MAX) {
+    const [primeira] = cacheGet.keys();
+    cacheGet.delete(primeira);
+  }
+  cacheGet.set(chave, { valor, expiraEm: Date.now() + cacheMs });
+}
+
 async function request(metodo, caminho, corpo, opcoes = {}) {
+  const cacheMs = metodo === 'GET' ? Number(opcoes.cacheMs || 0) : 0;
+  const cacheKey = cacheMs ? `${authToken || 'public'}:${API_BASE}${caminho}` : null;
+  if (cacheKey) {
+    const cached = obterCacheGet(cacheKey);
+    if (cached) return cached;
+  }
+
   let resposta;
   const timeoutMs = opcoes.timeoutMs || 60000;
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -80,6 +109,7 @@ async function request(metodo, caminho, corpo, opcoes = {}) {
     erro.payload = json;
     throw erro;
   }
+  if (cacheKey) salvarCacheGet(cacheKey, json, cacheMs);
   return json;
 }
 

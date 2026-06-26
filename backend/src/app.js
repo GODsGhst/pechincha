@@ -80,8 +80,15 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// Limite maior para aceitar fotos de cupom em base64
-app.use(express.json({ limit: '15mb' }));
+const jsonPadrao = express.json({ limit: '1mb' });
+const jsonNfce = express.json({ limit: '15mb' });
+
+app.use((req, res, next) => {
+  if (req.path === '/api/nfce/processar') {
+    return jsonNfce(req, res, next);
+  }
+  return jsonPadrao(req, res, next);
+});
 
 app.get('/', (_req, res) => {
   res.json({ message: 'API do Comparador de Preços por Cupons Fiscais', versao: '1.0.0' });

@@ -15,7 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
 import ProductImage from '../components/ProductImage';
 import { colors, fonts, radius } from '../theme';
-import { formatBRL } from '../utils/format';
+import { formatBRL, formatPrecoUnidade, rotuloConfiancaPreco } from '../utils/format';
+import { carregarBuscasRecentes, limparBuscasRecentes, salvarBuscaRecente } from '../utils/recentSearches';
 
 const CATEGORIAS_PADRAO = ['Alimentos', 'Bebidas', 'Limpeza', 'Higiene', 'Açougue', 'Hortifruti'];
 
@@ -35,7 +36,11 @@ function ordenarUnicos(lista) {
 }
 
 function metaTexto(item) {
-  return [item.categoria, item.tipo, item.marca, item.quantidade].filter(Boolean).join(' · ');
+  const partes = [];
+  if (item.marca) partes.push(item.marca);
+  else if (item.tipo) partes.push(item.tipo);
+  if (item.quantidade) partes.push(item.quantidade);
+  return partes.join(' · ');
 }
 
 function Chip({ label, ativo, onPress }) {
@@ -90,6 +95,7 @@ export default function SearchScreen({ route, navigation }) {
   const [carregando, setCarregando] = useState(false);
   const [buscou, setBuscou] = useState(false);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  const [buscasRecentes, setBuscasRecentes] = useState([]);
   const debounce = useRef(null);
   const requisicaoBusca = useRef(0);
   const requisicaoFiltros = useRef(0);
@@ -117,6 +123,10 @@ export default function SearchScreen({ route, navigation }) {
   }, [pulseValue]);
 
   useEffect(() => {
+    carregarBuscasRecentes().then(setBuscasRecentes);
+  }, []);
+
+  useEffect(() => {
     if (route.params?.categoria) {
       setCategoria(route.params.categoria);
       setTipo(null);
@@ -130,7 +140,7 @@ export default function SearchScreen({ route, navigation }) {
     const seq = ++requisicaoFiltros.current;
     try {
       const query = montarQuery({ categoria, tipo, marca, quantidade });
-      const resposta = await api.get(`/produtos/filtros${query}`, { timeoutMs: 20000 });
+      const resposta = await api.get(`/produtos/filtros${query}`, { timeoutMs: 20000, cacheMs: 120000 });
       if (seq === requisicaoFiltros.current) {
         setFiltros({
           categorias: resposta.categorias || [],
@@ -162,12 +172,15 @@ export default function SearchScreen({ route, navigation }) {
     setCarregando(true);
     try {
       const query = montarQuery({ termo: termoLimpo, categoria, tipo, marca, quantidade });
-      const { produtos } = await api.get(`/produtos${query}`, { timeoutMs: 20000 });
+      const { produtos } = await api.get(`/produtos${query}`, { timeoutMs: 20000, cacheMs: 30000 });
       if (seq !== requisicaoBusca.current) return;
 
       const lista = produtos || [];
       setResultados(lista);
       setSugestoes(termoLimpo.length >= 2 ? lista.slice(0, 8) : []);
+      if (termoLimpo.length >= 2 && lista.length > 0) {
+        salvarBuscaRecente(termoLimpo).then(setBuscasRecentes);
+      }
     } catch (_e) {
       if (seq === requisicaoBusca.current) {
         setResultados([]);
@@ -223,8 +236,20 @@ export default function SearchScreen({ route, navigation }) {
     setQuantidade(null);
   }
 
+  function limparFiltros() {
+    setCategoria(null);
+    setTipo(null);
+    setMarca(null);
+    setQuantidade(null);
+  }
+
+  async function apagarRecentes() {
+    setBuscasRecentes(await limparBuscasRecentes());
+  }
+
   const temFiltro = Boolean(termo || categoria || tipo || marca || quantidade);
   const temSugestoes = termo.trim().length >= 2 && sugestoes.length > 0;
+  const mostrarRecentes = !temFiltro && buscasRecentes.length > 0;
   const filtrosSelecionados = [categoria, tipo, marca, quantidade].filter(Boolean);
   const resumoFiltros = filtrosSelecionados.length > 0
     ? filtrosSelecionados.join(' · ')
@@ -283,6 +308,25 @@ export default function SearchScreen({ route, navigation }) {
         )}
       </View>
 
+      {mostrarRecentes && (
+        <View style={styles.recentesBox}>
+          <View style={styles.recentesTopo}>
+            <Text style={styles.recentesTitulo}>Buscas recentes</Text>
+            <Pressable onPress={apagarRecentes} hitSlop={8}>
+              <Text style={styles.recentesLimpar}>Limpar</Text>
+            </Pressable>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentesLista}>
+            {buscasRecentes.map((item) => (
+              <Pressable key={item} style={styles.recenteChip} onPress={() => setTermo(item)}>
+                <Ionicons name="time-outline" size={14} color={colors.brandDark} />
+                <Text style={styles.recenteTexto} numberOfLines={1}>{item}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       {temSugestoes && (
         <View style={styles.sugestoesBox}>
           <Text style={styles.sugestoesTitulo}>Sugestões</Text>
@@ -312,25 +356,48 @@ export default function SearchScreen({ route, navigation }) {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 110 }}
           keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <Pressable style={styles.linha} onPress={() => navigation.navigate('Product', { id: item.id, nome: item.nome })}>
-              <ProductImage uri={item.imagem_url} style={styles.linhaImg} iconSize={20} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.linhaNome} numberOfLines={2}>{item.nome}</Text>
-                {!!metaTexto(item) && <Text style={styles.linhaMeta} numberOfLines={1}>{metaTexto(item)}</Text>}
-                {item.ultimo_preco?.estabelecimento && (
-                  <Text style={styles.linhaLocal} numberOfLines={1}>{item.ultimo_preco.estabelecimento}</Text>
-                )}
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.linhaLabel}>menor</Text>
-                <Text style={styles.linhaPreco}>{formatBRL(item.menor_preco)}</Text>
-              </View>
-            </Pressable>
-          )}
+          ListHeaderComponent={resultados.length > 0 ? (
+            <View style={styles.resultadosTopo}>
+              <Text style={styles.resultadosTexto}>{resultados.length} {resultados.length === 1 ? 'resultado' : 'resultados'}</Text>
+              {filtrosSelecionados.length > 0 && (
+                <Pressable onPress={limparFiltros} hitSlop={8}>
+                  <Text style={styles.resultadosAcao}>limpar filtros</Text>
+                </Pressable>
+              )}
+            </View>
+          ) : null}
+          renderItem={({ item }) => {
+            const precoUnidade = formatPrecoUnidade(item.preco_unidade);
+            const idadePreco = rotuloConfiancaPreco(item.confianca_preco || item.ultimo_preco?.confianca_preco);
+            return (
+              <Pressable style={styles.linha} onPress={() => navigation.navigate('Product', { id: item.id, nome: item.nome })}>
+                <ProductImage uri={item.imagem_url} style={styles.linhaImg} iconSize={20} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.linhaNome} numberOfLines={2}>{item.nome}</Text>
+                  {!!metaTexto(item) && <Text style={styles.linhaMeta} numberOfLines={1}>{metaTexto(item)}</Text>}
+                  {item.ultimo_preco?.estabelecimento && (
+                    <Text style={styles.linhaLocal} numberOfLines={1}>{item.ultimo_preco.estabelecimento}</Text>
+                  )}
+                </View>
+                <View style={styles.linhaPrecoBox}>
+                  <Text style={styles.linhaLabel}>menor</Text>
+                  <Text style={styles.linhaPreco}>{formatBRL(item.menor_preco)}</Text>
+                  {!!precoUnidade && <Text style={styles.linhaPrecoUnidade} numberOfLines={1}>{precoUnidade}</Text>}
+                  {!!idadePreco && <Text style={styles.linhaFresh} numberOfLines={1}>{idadePreco}</Text>}
+                </View>
+              </Pressable>
+            );
+          }}
           ListEmptyComponent={
             buscou ? (
-              <Text style={styles.vazio}>Nenhum produto encontrado.</Text>
+              <View style={styles.vazioBox}>
+                <Text style={styles.vazio}>{filtrosSelecionados.length > 0 ? 'Nenhum produto com esses filtros.' : 'Nenhum produto encontrado.'}</Text>
+                {filtrosSelecionados.length > 0 && (
+                  <Pressable style={styles.vazioBotao} onPress={limparFiltros}>
+                    <Text style={styles.vazioBotaoTexto}>Limpar filtros</Text>
+                  </Pressable>
+                )}
+              </View>
             ) : (
               <Text style={styles.vazio}>Digite um produto ou escolha um filtro.</Text>
             )
@@ -363,6 +430,13 @@ const styles = StyleSheet.create({
   chipTexto: { fontFamily: fonts.medium, fontSize: 12, color: colors.inkSoft },
   chipTextoAtivo: { color: colors.white },
   sugestoesBox: { marginTop: 2 },
+  recentesBox: { paddingTop: 10 },
+  recentesTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 },
+  recentesTitulo: { fontFamily: fonts.medium, fontSize: 12, color: colors.inkMuted },
+  recentesLimpar: { fontFamily: fonts.semibold, fontSize: 11.5, color: colors.brand },
+  recentesLista: { paddingHorizontal: 16, gap: 8 },
+  recenteChip: { maxWidth: 180, height: 34, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, paddingHorizontal: 12 },
+  recenteTexto: { fontFamily: fonts.medium, fontSize: 12, color: colors.brandDark },
   sugestoesTitulo: { fontFamily: fonts.medium, fontSize: 12, color: colors.inkMuted, paddingHorizontal: 16, marginBottom: 8 },
   sugestoes: { paddingHorizontal: 16, gap: 8 },
   sugestao: { width: 230, minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.md, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, paddingHorizontal: 10, paddingVertical: 8 },
@@ -374,9 +448,18 @@ const styles = StyleSheet.create({
   linhaNome: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },
   linhaMeta: { fontFamily: fonts.body, fontSize: 11, color: colors.brandDark, marginTop: 2 },
   linhaLocal: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft, marginTop: 2 },
+  linhaPrecoBox: { alignItems: 'flex-end', minWidth: 76 },
   linhaLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted },
   linhaPreco: { fontFamily: fonts.monoMedium, fontSize: 15, color: colors.brand },
+  linhaPrecoUnidade: { fontFamily: fonts.body, fontSize: 10.5, color: colors.inkSoft, marginTop: 1 },
+  linhaFresh: { fontFamily: fonts.semibold, fontSize: 9.5, color: colors.inkMuted, marginTop: 2 },
+  resultadosTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  resultadosTexto: { fontFamily: fonts.medium, fontSize: 12, color: colors.inkMuted },
+  resultadosAcao: { fontFamily: fonts.semibold, fontSize: 11.5, color: colors.brand },
+  vazioBox: { alignItems: 'center', marginTop: 30 },
   vazio: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft, textAlign: 'center', marginTop: 40, paddingHorizontal: 24, lineHeight: 20 },
+  vazioBotao: { marginTop: 12, borderRadius: radius.md, backgroundColor: colors.brand, height: 42, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
+  vazioBotaoTexto: { fontFamily: fonts.semibold, fontSize: 13, color: colors.white },
   loadingLista: { paddingHorizontal: 16, paddingTop: 8 },
   loadingCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 12, marginBottom: 10 },
   loadingImg: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: '#E8EBE4' },

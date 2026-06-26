@@ -6,7 +6,7 @@ import { api } from '../api/client';
 import ProductImage from '../components/ProductImage';
 import { useCart } from '../context/CartContext';
 import { colors, fonts, radius } from '../theme';
-import { formatBRL } from '../utils/format';
+import { formatBRL, formatPrecoUnidade } from '../utils/format';
 
 export default function CartScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -39,7 +39,11 @@ export default function CartScreen({ navigation }) {
     : 'Somando os menores preços';
 
   function metaTexto(item) {
-    return [item.categoria, item.tipo, item.marca, item.quantidade_produto].filter(Boolean).join(' · ');
+    const partes = [];
+    if (item.marca) partes.push(item.marca);
+    else if (item.tipo) partes.push(item.tipo);
+    if (item.quantidade_produto) partes.push(item.quantidade_produto);
+    return partes.join(' · ');
   }
 
   const buscarAnalise = useCallback(async () => {
@@ -180,6 +184,9 @@ export default function CartScreen({ navigation }) {
               {!!metaTexto(item) && <Text style={styles.cardMeta} numberOfLines={1}>{metaTexto(item)}</Text>}
               <Text style={styles.cardLabel}>menor preço</Text>
               <Text style={styles.cardPreco}>{formatBRL(item.menor_preco)}</Text>
+              {!!formatPrecoUnidade(item.preco_unidade) && (
+                <Text style={styles.cardPrecoUnidade}>{formatPrecoUnidade(item.preco_unidade)}</Text>
+              )}
               <Pressable style={styles.analisar} onPress={() => navigation.navigate('Product', { id: item.id, nome: item.nome })}>
                 <Ionicons name="search" size={13} color={colors.brand} />
                 <Text style={styles.analisarTexto}>Analisar produto</Text>
@@ -275,6 +282,7 @@ const styles = StyleSheet.create({
   cardMeta: { fontFamily: fonts.body, fontSize: 11, color: colors.brandDark, marginTop: 2 },
   cardLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, marginTop: 4 },
   cardPreco: { fontFamily: fonts.monoMedium, fontSize: 15, color: colors.brand },
+  cardPrecoUnidade: { fontFamily: fonts.body, fontSize: 10.5, color: colors.inkSoft, marginTop: 1 },
   analisar: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
   analisarTexto: { fontFamily: fonts.semibold, fontSize: 12, color: colors.brand },
   acoesItem: { alignItems: 'flex-end', gap: 9 },

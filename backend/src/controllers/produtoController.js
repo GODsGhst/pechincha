@@ -4,6 +4,7 @@ const HistoricoPreco = require('../models/HistoricoPreco');
 const productNormalizer = require('../services/productNormalizer');
 const productImageService = require('../services/productImageService');
 const displayFormatter = require('../services/displayFormatter');
+const pricePresentation = require('../services/pricePresentationService');
 
 const CACHE_TTL_MS = 20 * 1000;
 const CACHE_MAX = 120;
@@ -70,10 +71,7 @@ function limparCache() {
   cacheRespostas.clear();
 }
 
-function arredondar(valor) {
-  if (valor === null || valor === undefined || Number.isNaN(Number(valor))) return null;
-  return Number(Number(valor).toFixed(2));
-}
+const { arredondar, precoPorMedida, confiancaPreco } = pricePresentation;
 
 function plano(produto) {
   if (!produto) return {};
@@ -212,6 +210,7 @@ function formatarProduto(p) {
   const produto = produtoComMetadados(p);
   const imagem = productImageService.imagemDoProduto(produto);
   const ultimoPreco = produto.ultimo_preco;
+  const precoUnidade = precoPorMedida(produto.menor_preco, produto);
   return {
     id: produto._id,
     nome: displayFormatter.formatarNomeProduto(produto),
@@ -222,10 +221,14 @@ function formatarProduto(p) {
     imagem_url: imagem.url,
     imagem_credito: imagem.credito,
     menor_preco: produto.menor_preco,
+    preco_unidade: precoUnidade,
+    confianca_preco: confiancaPreco(ultimoPreco && ultimoPreco.data),
     ultimo_preco: ultimoPreco && ultimoPreco.valor !== undefined && ultimoPreco.valor !== null
       ? {
           valor: ultimoPreco.valor,
           data: ultimoPreco.data,
+          preco_unidade: precoPorMedida(ultimoPreco.valor, produto),
+          confianca_preco: confiancaPreco(ultimoPreco.data),
           estabelecimento: ultimoPreco.estabelecimento_id && ultimoPreco.estabelecimento_id.nome
             ? displayFormatter.formatarNomeEstabelecimento(ultimoPreco.estabelecimento_id.nome)
             : null
@@ -480,7 +483,9 @@ async function menores(req, res, next) {
           imagem_url: imagem.url,
           imagem_credito: imagem.credito,
           valor: r.valor,
+          preco_unidade: precoPorMedida(r.valor, produto),
           data: r.data,
+          confianca_preco: confiancaPreco(r.data),
           estabelecimento_id: r.estabelecimento ? r.estabelecimento._id : null,
           estabelecimento: r.estabelecimento ? displayFormatter.formatarNomeEstabelecimento(r.estabelecimento.nome) : null,
           localizacao: r.estabelecimento && r.estabelecimento.localizacao &&
@@ -594,6 +599,8 @@ async function detalhar(req, res, next) {
     ]);
     const produtoNormalizado = produtoComMetadados(produto);
     const imagem = productImageService.imagemDoProduto(produtoNormalizado);
+    const ultimoPrecoValor = produto.ultimo_preco ? produto.ultimo_preco.valor : null;
+    const ultimoPrecoData = produto.ultimo_preco ? produto.ultimo_preco.data : null;
 
     return res.json({
       id: produto._id,
@@ -605,11 +612,16 @@ async function detalhar(req, res, next) {
       imagem_url: imagem.url,
       imagem_credito: imagem.credito,
       menor_preco: produto.menor_preco,
-      ultimo_preco: produto.ultimo_preco ? produto.ultimo_preco.valor : null,
+      preco_unidade: precoPorMedida(produto.menor_preco, produtoNormalizado),
+      confianca_preco: confiancaPreco(ultimoPrecoData),
+      ultimo_preco: ultimoPrecoValor,
+      ultimo_preco_unidade: precoPorMedida(ultimoPrecoValor, produtoNormalizado),
       ultimo_preco_info: produto.ultimo_preco && produto.ultimo_preco.valor !== undefined && produto.ultimo_preco.valor !== null
         ? {
             valor: produto.ultimo_preco.valor,
             data: produto.ultimo_preco.data,
+            preco_unidade: precoPorMedida(produto.ultimo_preco.valor, produtoNormalizado),
+            confianca_preco: confiancaPreco(produto.ultimo_preco.data),
             estabelecimento: produto.ultimo_preco.estabelecimento_id
               ? displayFormatter.formatarNomeEstabelecimento(produto.ultimo_preco.estabelecimento_id.nome)
               : null

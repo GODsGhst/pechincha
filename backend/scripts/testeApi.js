@@ -205,6 +205,10 @@ async function main() {
   verificar(arroz.categoria === 'Alimentos' && arroz.tipo === 'Arroz' && arroz.marca === 'Tio João',
     'produto retorna categoria/tipo/marca');
   verificar(arroz.quantidade === '5kg', 'produto retorna quantidade/tamanho');
+  verificar(arroz.preco_unidade && arroz.preco_unidade.valor === 4.58 && arroz.preco_unidade.unidade === 'kg',
+    'produto retorna preço normalizado por kg');
+  verificar(arroz.confianca_preco && arroz.confianca_preco.nivel,
+    'produto retorna confiança/idade do preço');
   verificar(typeof arroz.imagem_url === 'string' && arroz.imagem_url.includes('Golden_Rice'),
     'produto retorna imagem pública quando conhecida');
 
@@ -259,6 +263,8 @@ async function main() {
 
   const detalhe = await req('GET', `/produtos/${arroz.id}`);
   verificar(detalhe.status === 200 && detalhe.json.historico.length === 2, 'histórico do arroz tem 2 registros');
+  verificar(detalhe.json.preco_unidade && detalhe.json.preco_unidade.valor === 4.58,
+    'detalhe retorna preço por medida');
   verificar(detalhe.json.estatisticas.geral.media_preco === 23.7 &&
     detalhe.json.estatisticas.por_estabelecimento.length === 2,
     'detalhe retorna média geral e por estabelecimento');

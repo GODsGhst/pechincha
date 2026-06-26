@@ -4,10 +4,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
+import BrandMark from '../components/BrandMark';
 import ProductImage from '../components/ProductImage';
 import { useAuth } from '../context/AuthContext';
 import { colors, fonts, radius } from '../theme';
-import { formatBRL } from '../utils/format';
+import { formatBRL, formatPrecoUnidade, rotuloConfiancaPreco } from '../utils/format';
 
 const CATEGORIAS = [
   { nome: 'Alimentos', icone: 'fast-food-outline' },
@@ -40,7 +41,7 @@ export default function HomeScreen({ navigation }) {
     <View style={styles.tela}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerTopo}>
-          <Text style={styles.marca}>Consult<Text style={{ color: '#5FD698' }}>Price</Text></Text>
+          <BrandMark light />
           <View style={styles.headerIcones}>
             <Pressable onPress={() => navigation.navigate('Area')} accessibilityLabel="Área de pesquisa">
               <Ionicons name="location-outline" size={22} color="#BfE8D2" />
@@ -103,6 +104,12 @@ export default function HomeScreen({ navigation }) {
                 <Text style={styles.cardNome} numberOfLines={2}>{it.produto}</Text>
                 <Text style={styles.cardLabel}>menor preço</Text>
                 <Text style={styles.cardPreco}>{formatBRL(it.valor)}</Text>
+                {!!formatPrecoUnidade(it.preco_unidade) && (
+                  <Text style={styles.cardPrecoUnidade}>{formatPrecoUnidade(it.preco_unidade)}</Text>
+                )}
+                {!!rotuloConfiancaPreco(it.confianca_preco) && (
+                  <Text style={styles.cardFresh}>{rotuloConfiancaPreco(it.confianca_preco)}</Text>
+                )}
                 {it.estabelecimento && <Text style={styles.cardLocal} numberOfLines={1}>{it.estabelecimento}</Text>}
               </Pressable>
             ))}
@@ -117,7 +124,6 @@ const styles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: colors.canvas },
   header: { backgroundColor: colors.brandDark, paddingHorizontal: 16, paddingBottom: 26, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 },
   headerTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  marca: { fontFamily: fonts.display, fontSize: 20, color: colors.white },
   headerIcones: { flexDirection: 'row', gap: 16 },
   busca: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.white, borderRadius: radius.md, paddingHorizontal: 12, height: 46, marginTop: 14 },
   buscaTexto: { fontFamily: fonts.body, fontSize: 14, color: colors.inkMuted },
@@ -133,6 +139,8 @@ const styles = StyleSheet.create({
   cardNome: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink, marginTop: 8, minHeight: 34 },
   cardLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, marginTop: 4 },
   cardPreco: { fontFamily: fonts.monoMedium, fontSize: 16, color: colors.brand, marginTop: 2 },
+  cardPrecoUnidade: { fontFamily: fonts.body, fontSize: 10.5, color: colors.inkSoft, marginTop: 1 },
+  cardFresh: { alignSelf: 'flex-start', fontFamily: fonts.semibold, fontSize: 9.5, color: colors.inkMuted, marginTop: 3 },
   cardLocal: { fontFamily: fonts.body, fontSize: 11, color: colors.inkSoft, marginTop: 2 },
   vazio: { alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 24, marginTop: 8, gap: 8 },
   vazioTitulo: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink, marginTop: 4 },
