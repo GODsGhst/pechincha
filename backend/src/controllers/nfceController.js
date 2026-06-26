@@ -246,6 +246,32 @@ async function reservarImportacaoNfce(chaveAcesso, usuarioId, recebidoEm) {
   }
 }
 
+async function reservarOuResponderImportacao(res, chaveAcesso, usuarioId, recebidoEm) {
+  if (!chaveAcesso) return { respondeu: false, importacao: null };
+
+  const jaImportada = await buscarCompraPorChave(chaveAcesso);
+  if (jaImportada) {
+    await responderImportacaoExistente(res, {
+      chaveAcesso,
+      usuarioId,
+      compraExistente: jaImportada
+    });
+    return { respondeu: true, importacao: null };
+  }
+
+  const reserva = await reservarImportacaoNfce(chaveAcesso, usuarioId, recebidoEm);
+  if (!reserva.reservada) {
+    await responderImportacaoExistente(res, {
+      chaveAcesso,
+      usuarioId,
+      importacaoExistente: reserva.importacao
+    });
+    return { respondeu: true, importacao: null };
+  }
+
+  return { respondeu: false, importacao: reserva.importacao };
+}
+
 async function concluirImportacaoNfce(importacaoId, compraId, processadoEm, tempoMs) {
   if (!importacaoId) return;
   await ImportacaoNfce.updateOne(
@@ -314,6 +340,17 @@ async function processar(req, res, next) {
   let compra = null;
 
   try {
+    async function responderFalha(status, mensagem) {
+      if (reservaImportacao && reservaImportacao._id) {
+        try {
+          await falharImportacaoNfce(reservaImportacao._id, new Error(mensagem));
+        } catch (_err) {
+          // A resposta ao usuário é mais importante que o log de controle.
+        }
+      }
+      return res.status(status).json({ error: mensagem });
+    }
+
     const { html, imagem_base64 } = req.body || {};
     let { url_origem } = req.body || {};
 
@@ -333,19 +370,26 @@ async function processar(req, res, next) {
       }
     }
 
+    chaveAcesso = chaveAcessoDaUrl(url_origem);
+    if (chaveAcesso) {
+      const reserva = await reservarOuResponderImportacao(res, chaveAcesso, req.usuario.id, recebidoEm);
+      if (reserva.respondeu) return;
+      reservaImportacao = reserva.importacao;
+    }
+
     let conteudoHtml = html;
     if (!conteudoHtml) {
       try {
         conteudoHtml = await buscarHtmlDaNfce(url_origem);
       } catch (err) {
         if (err.status === 422) {
-          return res.status(422).json({ error: err.message });
+          return responderFalha(422, err.message);
         }
-        return res.status(502).json({ error: 'Não foi possível acessar a URL da NFC-e' });
+        return responderFalha(502, 'Não foi possível acessar a URL da NFC-e');
       }
     }
     if (Buffer.byteLength(String(conteudoHtml || ''), 'utf8') > MAX_HTML_BYTES) {
-      return res.status(413).json({ error: 'HTML da NFC-e excede o limite permitido' });
+      return responderFalha(413, 'HTML da NFC-e excede o limite permitido');
     }
 
     let dados = parseNfceHtml(conteudoHtml);
@@ -375,36 +419,25 @@ async function processar(req, res, next) {
         /tabResult/i.test(conteudoHtml),
         (String(conteudoHtml).match(/<table/gi) || []).length);
       console.warn('[NFC-e][SEM ITENS] trecho:', String(conteudoHtml).replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\s+/g, ' ').slice(0, 800));
-      return res.status(422).json({ error: 'Nenhum item encontrado no HTML da NFC-e' });
+      return responderFalha(422, 'Nenhum item encontrado no HTML da NFC-e');
     }
     if (!dados.estabelecimento.nome && !dados.estabelecimento.cnpj) {
-      return res.status(422).json({ error: 'Não foi possível identificar o estabelecimento na NFC-e' });
+      return responderFalha(422, 'Não foi possível identificar o estabelecimento na NFC-e');
     }
 
     // Chave de acesso (44 dígitos): identificador único da NFC-e.
     // Tenta o HTML; se não achar, extrai da própria URL do QR Code.
-    chaveAcesso = dados.chave_acesso || chaveAcessoDaUrl(url_origem);
+    const chaveDetectada = dados.chave_acesso || chaveAcessoDaUrl(url_origem);
+    if (chaveAcesso && chaveDetectada && chaveDetectada !== chaveAcesso) {
+      return responderFalha(422, 'A chave de acesso da NFC-e não confere com a URL lida');
+    }
+    chaveAcesso = chaveAcesso || chaveDetectada;
 
     // Deduplicação no nível do cupom: a mesma nota não pode ser importada
     // duas vezes (evita contar o mesmo preço em dobro no histórico).
-    if (chaveAcesso) {
-      const jaImportada = await buscarCompraPorChave(chaveAcesso);
-      if (jaImportada) {
-        return responderImportacaoExistente(res, {
-          chaveAcesso,
-          usuarioId: req.usuario.id,
-          compraExistente: jaImportada
-        });
-      }
-
-      const reserva = await reservarImportacaoNfce(chaveAcesso, req.usuario.id, recebidoEm);
-      if (!reserva.reservada) {
-        return responderImportacaoExistente(res, {
-          chaveAcesso,
-          usuarioId: req.usuario.id,
-          importacaoExistente: reserva.importacao
-        });
-      }
+    if (chaveAcesso && !reservaImportacao) {
+      const reserva = await reservarOuResponderImportacao(res, chaveAcesso, req.usuario.id, recebidoEm);
+      if (reserva.respondeu) return;
       reservaImportacao = reserva.importacao;
     }
 
