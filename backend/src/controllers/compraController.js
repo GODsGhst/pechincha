@@ -3,6 +3,7 @@ const Compra = require('../models/Compra');
 const Estabelecimento = require('../models/Estabelecimento');
 const Produto = require('../models/Produto');
 const compraService = require('../services/compraService');
+const displayFormatter = require('../services/displayFormatter');
 
 function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -12,19 +13,19 @@ function formatar(compra) {
   return {
     id: compra._id,
     estabelecimento: compra.estabelecimento_id && compra.estabelecimento_id.nome
-      ? compra.estabelecimento_id.nome
+      ? displayFormatter.formatarNomeEstabelecimento(compra.estabelecimento_id.nome)
       : compra.estabelecimento_id,
     data_compra: compra.data_compra,
     valor_total: compra.valor_total,
     nfce_url: compra.nfce_url || null,
     itens: compra.itens.map((i) => ({
       produto_id: i.produto_id && i.produto_id.nome ? i.produto_id._id : i.produto_id,
-      produto: i.produto_id && i.produto_id.nome ? i.produto_id.nome : null,
+      produto: i.produto_id && i.produto_id.nome ? displayFormatter.formatarNomeProduto(i.produto_id) : null,
       categoria: i.produto_id && i.produto_id.categoria ? i.produto_id.categoria : null,
       tipo: i.produto_id && i.produto_id.tipo ? i.produto_id.tipo : null,
       marca: i.produto_id && i.produto_id.marca ? i.produto_id.marca : null,
       quantidade_produto: i.produto_id && i.produto_id.quantidade ? i.produto_id.quantidade : null,
-      nome_original: i.nome_original || null,
+      nome_original: i.nome_original ? displayFormatter.formatarNomeProduto(i.nome_original) : null,
       quantidade: i.quantidade,
       valor_unitario: i.valor_unitario,
       valor_total: i.valor_total
@@ -151,7 +152,7 @@ async function criar(req, res, next) {
 
     return res.status(201).json({
       compra_id: compra._id,
-      estabelecimento: estabelecimento.nome,
+      estabelecimento: displayFormatter.formatarNomeEstabelecimento(estabelecimento.nome),
       data_compra: compra.data_compra,
       valor_total: compra.valor_total,
       itens_processados: itensValidados.length,

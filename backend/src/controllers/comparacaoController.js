@@ -3,6 +3,7 @@ const Compra = require('../models/Compra');
 const HistoricoPreco = require('../models/HistoricoPreco');
 const Produto = require('../models/Produto');
 const productImageService = require('../services/productImageService');
+const displayFormatter = require('../services/displayFormatter');
 
 function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -86,7 +87,7 @@ async function menoresDoUsuario(req, res, next) {
         const imagem = productImageService.imagemDoProduto(produto);
         return {
           produto_id: r._id.produto,
-          produto: produto ? produto.nome : null,
+          produto: produto ? displayFormatter.formatarNomeProduto(produto) : null,
           categoria: produto ? produto.categoria || null : null,
           tipo: produto ? produto.tipo || null : null,
           marca: produto ? produto.marca || null : null,
@@ -96,7 +97,7 @@ async function menoresDoUsuario(req, res, next) {
           valor: r.valor,
           data: r.data,
           estabelecimento_id: r.estabelecimento._id,
-          estabelecimento: r.estabelecimento.nome,
+          estabelecimento: displayFormatter.formatarNomeEstabelecimento(r.estabelecimento.nome),
           localizacao: localizacaoDoEstabelecimento(r.estabelecimento)
         };
       });
@@ -138,7 +139,9 @@ async function compararCompra(req, res, next) {
 
     const resumoCompra = {
       id: compra._id,
-      estabelecimento: compra.estabelecimento_id ? compra.estabelecimento_id.nome : null,
+      estabelecimento: compra.estabelecimento_id
+        ? displayFormatter.formatarNomeEstabelecimento(compra.estabelecimento_id.nome)
+        : null,
       data_compra: compra.data_compra,
       valor_total: compra.valor_total
     };
@@ -164,14 +167,16 @@ async function compararCompra(req, res, next) {
 
         return {
           produto_id: chave,
-          produto: item.produto_id.nome || item.nome_original,
+          produto: item.produto_id.nome
+            ? displayFormatter.formatarNomeProduto(item.produto_id)
+            : displayFormatter.formatarNomeProduto(item.nome_original),
           quantidade: item.quantidade,
           valor_pago_unitario: item.valor_unitario,
           menor_valor: menor
             ? {
                 valor: menor.valor,
                 estabelecimento_id: menor.estabelecimento._id,
-                estabelecimento: menor.estabelecimento.nome,
+                estabelecimento: displayFormatter.formatarNomeEstabelecimento(menor.estabelecimento.nome),
                 data: menor.data
               }
             : null,
@@ -219,7 +224,7 @@ async function compararCompra(req, res, next) {
       const coberturaCompleta = cobertos === compra.itens.length;
       return {
         estabelecimento_id: estabelecimento._id,
-        estabelecimento: estabelecimento.nome,
+        estabelecimento: displayFormatter.formatarNomeEstabelecimento(estabelecimento.nome),
         localizacao: localizacaoDoEstabelecimento(estabelecimento),
         total_estimado: moeda(total),
         produtos_cobertos: cobertos,
@@ -291,7 +296,7 @@ async function compararCesta(req, res, next) {
       const imagem = productImageService.imagemDoProduto(produto);
       return {
         produto_id: id,
-        produto: produto.nome,
+        produto: displayFormatter.formatarNomeProduto(produto),
         categoria: produto.categoria || null,
         tipo: produto.tipo || null,
         marca: produto.marca || null,
@@ -330,7 +335,7 @@ async function compararCesta(req, res, next) {
           subtotal: moeda(subtotal),
           data: menor.data,
           estabelecimento_id: menor.estabelecimento._id,
-          estabelecimento: menor.estabelecimento.nome,
+          estabelecimento: displayFormatter.formatarNomeEstabelecimento(menor.estabelecimento.nome),
           localizacao: localizacaoDoEstabelecimento(menor.estabelecimento)
         }
       };
@@ -378,7 +383,7 @@ async function compararCesta(req, res, next) {
       const coberturaCompleta = cobertos === itens.length;
       return {
         estabelecimento_id: estabelecimento._id,
-        estabelecimento: estabelecimento.nome,
+        estabelecimento: displayFormatter.formatarNomeEstabelecimento(estabelecimento.nome),
         localizacao: localizacaoDoEstabelecimento(estabelecimento),
         total_estimado: moeda(total),
         produtos_cobertos: cobertos,

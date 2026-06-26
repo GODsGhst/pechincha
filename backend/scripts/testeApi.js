@@ -149,7 +149,7 @@ async function main() {
   verificar(nfce1.status === 201, 'NFC-e 1 retorna 201', JSON.stringify(nfce1.json));
   verificar(nfce1.json.itens_processados === 3 && nfce1.json.itens_novos === 3, 'NFC-e 1: 3 itens, 3 novos');
   verificar(nfce1.json.valor_total === 61.05, 'NFC-e 1: valor_total 61.05');
-  verificar(nfce1.json.estabelecimento === 'SUPERMERCADO ABC LTDA', 'NFC-e 1: estabelecimento extraído');
+  verificar(nfce1.json.estabelecimento === 'Supermercado ABC Ltda', 'NFC-e 1: estabelecimento extraído e formatado');
   const compraId = nfce1.json.compra_id;
 
   const nfce2 = await req('POST', '/nfce/processar', { html: HTML_ATACADAO_XYZ }, token);
@@ -249,7 +249,7 @@ async function main() {
   const total = await req('GET', `/comparacao/compras/${compraId}?visao=total`, null, token);
   verificar(total.status === 200 && total.json.comparacao.length === 2, 'visão total compara 2 estabelecimentos');
   const maisBarato = total.json.comparacao[0];
-  verificar(maisBarato.estabelecimento === 'ATACADAO XYZ LTDA' && maisBarato.total_estimado === 57.89,
+  verificar(maisBarato.estabelecimento === 'Atacadão XYZ Ltda' && maisBarato.total_estimado === 57.89,
     'cesta mais barata no Atacadão (57.89)', JSON.stringify(maisBarato));
   verificar(maisBarato.economia_vs_pago === 3.16, 'economia_vs_pago = 3.16', `obtido: ${maisBarato.economia_vs_pago}`);
 
@@ -274,7 +274,7 @@ async function main() {
   verificar(cestaLivre.status === 200 && cestaLivre.json.comparacao.length === 2,
     'cesta livre compara 2 estabelecimentos', JSON.stringify(cestaLivre.json));
   const cestaMaisBarata = cestaLivre.json.comparacao[0];
-  verificar(cestaMaisBarata.estabelecimento === 'ATACADAO XYZ LTDA' && cestaMaisBarata.total_estimado === 57.89,
+  verificar(cestaMaisBarata.estabelecimento === 'Atacadão XYZ Ltda' && cestaMaisBarata.total_estimado === 57.89,
     'cesta livre mais barata no Atacadão (57.89)', JSON.stringify(cestaMaisBarata));
   verificar(cestaLivre.json.resumo.total_melhores_individuais === 57.89,
     'cesta livre: soma dos menores individuais = 57.89', JSON.stringify(cestaLivre.json.resumo));
@@ -285,7 +285,7 @@ async function main() {
   console.log('\n--- Mapa ---');
   const mapa = await req('GET', '/estabelecimentos/mapa');
   verificar(mapa.status === 200 && mapa.json.estabelecimentos.length === 2, 'mapa retorna 2 estabelecimentos');
-  const atacadao = mapa.json.estabelecimentos.find((e) => e.nome === 'ATACADAO XYZ LTDA');
+  const atacadao = mapa.json.estabelecimentos.find((e) => e.nome === 'Atacadão XYZ Ltda');
   verificar(atacadao && atacadao.produtos_mais_baratos === 3, 'Atacadão tem o menor preço dos 3 produtos',
     JSON.stringify(atacadao));
 

@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
   linhaNome: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },
   linhaMeta: { fontFamily: fonts.body, fontSize: 11, color: colors.brandDark, marginTop: 2 },
   linhaLocal: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft, marginTop: 2 },
-  linhaLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, textTransform: 'uppercase' },
+  linhaLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted },
   linhaPreco: { fontFamily: fonts.monoMedium, fontSize: 15, color: colors.brand },
   vazio: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft, textAlign: 'center', marginTop: 40, paddingHorizontal: 24, lineHeight: 20 },
 });

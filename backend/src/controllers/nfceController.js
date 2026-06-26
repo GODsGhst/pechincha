@@ -7,6 +7,7 @@ const { parseNfceHtml, chaveAcessoDaUrl } = require('../services/nfceParser');
 const compraService = require('../services/compraService');
 const { geocodificarEndereco } = require('../services/geoService');
 const { lerQrCodeDeImagem, base64ParaBuffer } = require('../services/qrCodeService');
+const displayFormatter = require('../services/displayFormatter');
 
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
@@ -249,9 +250,9 @@ async function processar(req, res, next) {
     }
     if (!estabelecimento) {
       estabelecimento = await Estabelecimento.create({
-        nome: dados.estabelecimento.nome || 'ESTABELECIMENTO NÃO IDENTIFICADO',
+        nome: displayFormatter.formatarNomeEstabelecimento(dados.estabelecimento.nome) || 'Estabelecimento não identificado',
         cnpj: dados.estabelecimento.cnpj || `SEM-CNPJ-${Date.now()}`,
-        endereco: dados.estabelecimento.endereco
+        endereco: displayFormatter.formatarEndereco(dados.estabelecimento.endereco)
       });
       atualizarLocalizacaoEmSegundoPlano(estabelecimento._id, dados.estabelecimento.endereco);
     }
@@ -309,7 +310,7 @@ async function processar(req, res, next) {
 
     return res.status(201).json({
       compra_id: compra._id,
-      estabelecimento: estabelecimento.nome,
+      estabelecimento: displayFormatter.formatarNomeEstabelecimento(estabelecimento.nome),
       chave_acesso: chaveAcesso || null,
       data_compra: compra.data_compra,
       valor_total: compra.valor_total,

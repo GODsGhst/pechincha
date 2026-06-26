@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const ListaCompra = require('../models/ListaCompra');
 const Produto = require('../models/Produto');
 const productImageService = require('../services/productImageService');
+const displayFormatter = require('../services/displayFormatter');
 
 function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -34,7 +35,7 @@ function formatarItem(item) {
   return {
     id: String(produto._id),
     produto_id: String(produto._id),
-    nome: produto.nome,
+    nome: displayFormatter.formatarNomeProduto(produto),
     categoria: produto.categoria || null,
     tipo: produto.tipo || null,
     marca: produto.marca || null,

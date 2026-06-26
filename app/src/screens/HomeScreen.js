@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   card: { width: '47%', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 10 },
   cardImg: { height: 78, borderRadius: radius.md, backgroundColor: '#F1F0EA', alignItems: 'center', justifyContent: 'center' },
   cardNome: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink, marginTop: 8, minHeight: 34 },
-  cardLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, textTransform: 'uppercase', marginTop: 4 },
+  cardLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, marginTop: 4 },
   cardPreco: { fontFamily: fonts.monoMedium, fontSize: 16, color: colors.brand, marginTop: 2 },
   cardLocal: { fontFamily: fonts.body, fontSize: 11, color: colors.inkSoft, marginTop: 2 },
   vazio: { alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 24, marginTop: 8, gap: 8 },

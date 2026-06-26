@@ -3,7 +3,7 @@
 // backend já mantém em /estabelecimentos/mapa.
 
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { colors, fonts, radius } from '../theme';
 import { tempoRelativo } from '../utils/format';
 
 const DISTANCIAS = [5, 10, 20, 50];
+const GPS_TIMEOUT_MS = 12000;
 
 function distanciaKm(origem, destino) {
   if (!origem || !destino) return null;
@@ -36,26 +37,33 @@ function formatarDistancia(km) {
 export default function AreaScreen({ navigation }) {
   const [distancia, setDistancia] = useState(10);
   const [localizacao, setLocalizacao] = useState(null);
+  const [precisao, setPrecisao] = useState(null);
+  const [origemGps, setOrigemGps] = useState(null);
   const [endereco, setEndereco] = useState(null);
   const [estabelecimentos, setEstabelecimentos] = useState([]);
   const [carregandoGps, setCarregandoGps] = useState(false);
   const [carregandoLojas, setCarregandoLojas] = useState(false);
   const [erro, setErro] = useState(null);
 
+  const lojasComCoordenadas = useMemo(
+    () => estabelecimentos.filter((loja) => loja.localizacao),
+    [estabelecimentos]
+  );
+  const lojasSemCoordenadas = Math.max(0, estabelecimentos.length - lojasComCoordenadas.length);
+
   const lojasComDistancia = useMemo(() => {
-    return estabelecimentos
-      .filter((loja) => loja.localizacao)
+    return lojasComCoordenadas
       .map((loja) => ({
         ...loja,
         distancia_km: distanciaKm(localizacao, loja.localizacao),
       }))
-      .filter((loja) => loja.distancia_km === null || loja.distancia_km <= distancia)
+      .filter((loja) => !localizacao || loja.distancia_km <= distancia)
       .sort((a, b) => {
         if (a.distancia_km === null) return 1;
         if (b.distancia_km === null) return -1;
         return a.distancia_km - b.distancia_km;
       });
-  }, [distancia, estabelecimentos, localizacao]);
+  }, [distancia, lojasComCoordenadas, localizacao]);
 
   async function buscarLojas() {
     setCarregandoLojas(true);
@@ -72,6 +80,7 @@ export default function AreaScreen({ navigation }) {
   async function usarLocalizacaoAtual() {
     setCarregandoGps(true);
     setErro(null);
+    let usouUltimaLocalizacao = false;
     try {
       const servicosAtivos = await Location.hasServicesEnabledAsync();
       if (!servicosAtivos) {
@@ -79,35 +88,61 @@ export default function AreaScreen({ navigation }) {
         return;
       }
 
+      if (Platform.OS === 'android' && Location.enableNetworkProviderAsync) {
+        await Location.enableNetworkProviderAsync().catch(() => {});
+      }
+
       const perm = await Location.requestForegroundPermissionsAsync();
       if (!perm.granted) {
-        setErro('Autorize a localização para calcular as lojas próximas.');
+        setErro(perm.canAskAgain === false
+          ? 'A localização foi bloqueada. Libere a permissão nas configurações do Android para calcular as lojas próximas.'
+          : 'Autorize a localização para calcular as lojas próximas.');
         return;
       }
 
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const coords = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-      };
-      setLocalizacao(coords);
-
-      try {
-        const [geo] = await Location.reverseGeocodeAsync({
-          latitude: coords.lat,
-          longitude: coords.lng,
-        });
-        setEndereco(geo || null);
-      } catch (_e) {
-        setEndereco(null);
+      const ultima = await Location.getLastKnownPositionAsync({
+        maxAge: 10 * 60 * 1000,
+        requiredAccuracy: 3000,
+      }).catch(() => null);
+      if (ultima) {
+        aplicarPosicao(ultima, 'ultima');
+        usouUltimaLocalizacao = true;
       }
-    } catch (_e) {
-      setErro('Não consegui pegar sua localização agora.');
+
+      const pos = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('gps_timeout')), GPS_TIMEOUT_MS))
+      ]);
+      aplicarPosicao(pos, 'atual');
+    } catch (e) {
+      if (usouUltimaLocalizacao || localizacao) {
+        setErro('Usei a última localização conhecida. Toque em usar atual de novo se o GPS terminar de localizar.');
+      } else if (e?.message === 'gps_timeout') {
+        setErro('O GPS demorou para responder. Ative localização precisa e tente novamente em uma área aberta.');
+      } else {
+        setErro('Não consegui pegar sua localização agora. Verifique GPS, permissão e internet.');
+      }
     } finally {
       setCarregandoGps(false);
     }
+  }
+
+  function aplicarPosicao(pos, origem) {
+    if (!pos?.coords) return;
+    const coords = {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+    };
+    setLocalizacao(coords);
+    setPrecisao(Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null);
+    setOrigemGps(origem);
+
+    Location.reverseGeocodeAsync({
+      latitude: coords.lat,
+      longitude: coords.lng,
+    })
+      .then(([geo]) => setEndereco(geo || null))
+      .catch(() => setEndereco(null));
   }
 
   useEffect(() => {
@@ -121,7 +156,12 @@ export default function AreaScreen({ navigation }) {
       ? `${localizacao.lat.toFixed(5)}, ${localizacao.lng.toFixed(5)}`
       : 'Localização não definida';
 
-  const complementoLocal = endereco?.postalCode || (localizacao ? 'GPS ativo' : 'Toque em usar atual');
+  const complementoLocal = localizacao
+    ? [
+        origemGps === 'ultima' ? 'Última localização conhecida' : 'GPS ativo',
+        precisao ? `precisão ~${Math.round(precisao)} m` : null
+      ].filter(Boolean).join(' · ')
+    : 'Toque em usar atual';
 
   return (
     <SafeAreaView style={styles.tela} edges={['top']}>
@@ -195,13 +235,18 @@ export default function AreaScreen({ navigation }) {
             </View>
           </View>
           <Text style={styles.mapaNota}>
-            {lojasComDistancia.length} {lojasComDistancia.length === 1 ? 'loja' : 'lojas'} num raio de {distancia} km
+            {localizacao
+              ? `${lojasComDistancia.length} ${lojasComDistancia.length === 1 ? 'loja' : 'lojas'} num raio de ${distancia} km`
+              : `${lojasComCoordenadas.length} ${lojasComCoordenadas.length === 1 ? 'loja' : 'lojas'} com mapa`}
           </Text>
+          {lojasSemCoordenadas > 0 && (
+            <Text style={styles.mapaSubnota}>{lojasSemCoordenadas} sem coordenadas ainda</Text>
+          )}
         </View>
 
         <View style={styles.listaTopo}>
           <Text style={styles.cardLabel}>lojas próximas</Text>
-          <Text style={styles.listaContador}>{estabelecimentos.length} no banco</Text>
+          <Text style={styles.listaContador}>{lojasComDistancia.length}/{estabelecimentos.length} no banco</Text>
         </View>
 
         {carregandoLojas ? (
@@ -210,7 +255,9 @@ export default function AreaScreen({ navigation }) {
           <View style={styles.vazio}>
             <Ionicons name="storefront-outline" size={28} color={colors.inkMuted} />
             <Text style={styles.vazioTexto}>
-              Nenhuma loja com coordenadas apareceu nesse raio.
+              {localizacao
+                ? 'Nenhuma loja com coordenadas apareceu nesse raio.'
+                : 'Ative o GPS para calcular distância das lojas.'}
             </Text>
           </View>
         ) : (
@@ -242,7 +289,7 @@ const styles = StyleSheet.create({
   headerTitulo: { fontFamily: fonts.semibold, fontSize: 16, color: colors.brandDark },
   tituloLinha: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   titulo: { fontFamily: fonts.display, fontSize: 22, color: colors.brandDark },
-  cardLabel: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted, textTransform: 'uppercase' },
+  cardLabel: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted },
   cardLocal: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 14, marginTop: 12 },
   cardLocalNome: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink, marginTop: 4 },
   cardLocalCep: { fontFamily: fonts.body, fontSize: 13, color: colors.inkMuted, marginTop: 2 },
@@ -262,6 +309,7 @@ const styles = StyleSheet.create({
   raioExterno: { width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(22,163,90,0.12)', borderWidth: 1.5, borderColor: colors.brand, alignItems: 'center', justifyContent: 'center' },
   raioInterno: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   mapaNota: { fontFamily: fonts.medium, fontSize: 13, color: colors.inkSoft },
+  mapaSubnota: { fontFamily: fonts.body, fontSize: 11.5, color: colors.inkMuted, marginTop: -8 },
   listaTopo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 18, marginBottom: 10 },
   listaContador: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted },
   vazio: { alignItems: 'center', gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 18 },

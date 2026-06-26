@@ -3,6 +3,7 @@ const Produto = require('../models/Produto');
 const HistoricoPreco = require('../models/HistoricoPreco');
 const productNormalizer = require('../services/productNormalizer');
 const productImageService = require('../services/productImageService');
+const displayFormatter = require('../services/displayFormatter');
 
 function escapeRegex(texto) {
   return texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -43,7 +44,7 @@ function formatarProduto(p) {
   const imagem = productImageService.imagemDoProduto(p);
   return {
     id: p._id,
-    nome: p.nome,
+    nome: displayFormatter.formatarNomeProduto(p),
     categoria: p.categoria || null,
     tipo: p.tipo || null,
     marca: p.marca || null,
@@ -55,7 +56,9 @@ function formatarProduto(p) {
       ? {
           valor: p.ultimo_preco.valor,
           data: p.ultimo_preco.data,
-          estabelecimento: p.ultimo_preco.estabelecimento_id ? p.ultimo_preco.estabelecimento_id.nome : null
+          estabelecimento: p.ultimo_preco.estabelecimento_id
+            ? displayFormatter.formatarNomeEstabelecimento(p.ultimo_preco.estabelecimento_id.nome)
+            : null
         }
       : null
   };
@@ -75,7 +78,9 @@ function compactarHistoricoPreco(historico) {
       porLocalEValor.set(chave, {
         valor: h.valor,
         estabelecimento_id: estabelecimentoId === 'sem-local' ? null : estabelecimentoId,
-        estabelecimento: h.estabelecimento_id && h.estabelecimento_id.nome ? h.estabelecimento_id.nome : null,
+        estabelecimento: h.estabelecimento_id && h.estabelecimento_id.nome
+          ? displayFormatter.formatarNomeEstabelecimento(h.estabelecimento_id.nome)
+          : null,
         data: h.data,
         observacoes
       });
@@ -163,7 +168,7 @@ async function estatisticasPreco(produtoId) {
     geral: formatarAgregadoPreco(geral[0]),
     por_estabelecimento: porEstabelecimento.map((r) => ({
       estabelecimento_id: r._id || null,
-      estabelecimento: r.estabelecimento ? r.estabelecimento.nome : null,
+      estabelecimento: r.estabelecimento ? displayFormatter.formatarNomeEstabelecimento(r.estabelecimento.nome) : null,
       ...formatarAgregadoPreco(r),
       ultimo_preco: arredondar(r.ultimo_preco),
       ultima_data: r.ultima_data || null
@@ -259,7 +264,7 @@ async function menores(req, res, next) {
         const imagem = productImageService.imagemDoProduto(r.produto);
         return {
           produto_id: r._id,
-          produto: r.produto.nome,
+          produto: displayFormatter.formatarNomeProduto(r.produto),
           categoria: r.produto.categoria || null,
           tipo: r.produto.tipo || null,
           marca: r.produto.marca || null,
@@ -269,7 +274,7 @@ async function menores(req, res, next) {
           valor: r.valor,
           data: r.data,
           estabelecimento_id: r.estabelecimento ? r.estabelecimento._id : null,
-          estabelecimento: r.estabelecimento ? r.estabelecimento.nome : null,
+          estabelecimento: r.estabelecimento ? displayFormatter.formatarNomeEstabelecimento(r.estabelecimento.nome) : null,
           localizacao: r.estabelecimento && r.estabelecimento.localizacao &&
             r.estabelecimento.localizacao.lat !== undefined && r.estabelecimento.localizacao.lat !== null
             ? { lat: r.estabelecimento.localizacao.lat, lng: r.estabelecimento.localizacao.lng }
@@ -352,7 +357,7 @@ async function detalhar(req, res, next) {
 
     return res.json({
       id: produto._id,
-      nome: produto.nome,
+      nome: displayFormatter.formatarNomeProduto(produto),
       categoria: produto.categoria || null,
       tipo: produto.tipo || null,
       marca: produto.marca || null,

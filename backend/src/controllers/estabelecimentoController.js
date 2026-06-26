@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Estabelecimento = require('../models/Estabelecimento');
 const HistoricoPreco = require('../models/HistoricoPreco');
 const { geocodificarEndereco } = require('../services/geoService');
+const displayFormatter = require('../services/displayFormatter');
 
 function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -10,13 +11,40 @@ function idValido(id) {
 function formatar(e) {
   return {
     id: e._id,
-    nome: e.nome,
+    nome: displayFormatter.formatarNomeEstabelecimento(e.nome),
     cnpj: e.cnpj,
-    endereco: e.endereco || null,
+    endereco: displayFormatter.formatarEndereco(e.endereco),
     localizacao: e.localizacao && e.localizacao.lat !== undefined && e.localizacao.lat !== null
       ? { lat: e.localizacao.lat, lng: e.localizacao.lng }
       : null
   };
+}
+
+function temLocalizacao(e) {
+  return e.localizacao && e.localizacao.lat !== undefined && e.localizacao.lat !== null;
+}
+
+function geocodificarPendentesEmSegundoPlano(estabelecimentos) {
+  const pendentes = estabelecimentos
+    .filter((e) => e.endereco && !temLocalizacao(e))
+    .slice(0, 5);
+
+  if (pendentes.length === 0) return;
+
+  Promise.allSettled(pendentes.map(async (e) => {
+    const coords = await geocodificarEndereco(e.endereco);
+    if (!coords) return;
+    await Estabelecimento.updateOne(
+      {
+        _id: e._id,
+        $or: [
+          { 'localizacao.lat': { $exists: false } },
+          { 'localizacao.lat': null }
+        ]
+      },
+      { $set: { localizacao: coords } }
+    );
+  })).catch(() => {});
 }
 
 // GET /api/estabelecimentos
@@ -36,6 +64,7 @@ async function listar(_req, res, next) {
 async function mapa(_req, res, next) {
   try {
     const estabelecimentos = await Estabelecimento.find();
+    geocodificarPendentesEmSegundoPlano(estabelecimentos);
 
     // Estatísticas gerais por estabelecimento
     const stats = await HistoricoPreco.aggregate([
