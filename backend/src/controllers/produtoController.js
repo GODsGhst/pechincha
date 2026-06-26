@@ -52,6 +52,37 @@ function formatarProduto(p) {
   };
 }
 
+function compactarHistoricoPreco(historico) {
+  const porLocalEValor = new Map();
+
+  for (const h of historico) {
+    const estabelecimentoId = h.estabelecimento_id && h.estabelecimento_id._id
+      ? String(h.estabelecimento_id._id)
+      : String(h.estabelecimento_id || 'sem-local');
+    const chave = `${estabelecimentoId}:${Number(h.valor).toFixed(2)}`;
+    const observacoes = Number(h.observacoes) || 1;
+
+    if (!porLocalEValor.has(chave)) {
+      porLocalEValor.set(chave, {
+        valor: h.valor,
+        estabelecimento_id: estabelecimentoId === 'sem-local' ? null : estabelecimentoId,
+        estabelecimento: h.estabelecimento_id && h.estabelecimento_id.nome ? h.estabelecimento_id.nome : null,
+        data: h.data,
+        observacoes
+      });
+      continue;
+    }
+
+    const atual = porLocalEValor.get(chave);
+    atual.observacoes += observacoes;
+    if (h.data && (!atual.data || h.data > atual.data)) {
+      atual.data = h.data;
+    }
+  }
+
+  return [...porLocalEValor.values()].sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0));
+}
+
 // GET /api/produtos?nome=arroz&categoria=Alimentos&tipo=Arroz&marca=Tio%20João&quantidade=5kg
 async function listar(req, res, next) {
   try {
@@ -238,11 +269,7 @@ async function detalhar(req, res, next) {
       quantidade: produto.quantidade || null,
       menor_preco: produto.menor_preco,
       ultimo_preco: produto.ultimo_preco ? produto.ultimo_preco.valor : null,
-      historico: historico.map((h) => ({
-        valor: h.valor,
-        estabelecimento: h.estabelecimento_id ? h.estabelecimento_id.nome : null,
-        data: h.data
-      }))
+      historico: compactarHistoricoPreco(historico)
     });
   } catch (err) {
     return next(err);

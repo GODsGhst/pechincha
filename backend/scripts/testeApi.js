@@ -76,6 +76,10 @@ async function main() {
   const app = require('../src/app');
   const connectDB = require('../src/config/database');
   const Usuario = require('../src/models/Usuario');
+  const Compra = require('../src/models/Compra');
+  const Produto = require('../src/models/Produto');
+  const HistoricoPreco = require('../src/models/HistoricoPreco');
+  const compraService = require('../src/services/compraService');
   await connectDB();
 
   const PORTA = 3210;
@@ -158,6 +162,33 @@ async function main() {
 
   const detalhe = await req('GET', `/produtos/${arroz.id}`);
   verificar(detalhe.status === 200 && detalhe.json.historico.length === 2, 'histórico do arroz tem 2 registros');
+
+  const compraOriginal = await Compra.findById(compraId);
+  const produtoArroz = await Produto.findById(arroz.id);
+  const totalHistoricoAntes = await HistoricoPreco.countDocuments({ produto_id: produtoArroz._id });
+  await compraService.registrarPreco({
+    produto: produtoArroz,
+    estabelecimentoId: compraOriginal.estabelecimento_id,
+    compraId: compraOriginal._id,
+    valor: 24.5,
+    data: compraOriginal.data_compra
+  });
+  const totalHistoricoDepois = await HistoricoPreco.countDocuments({ produto_id: produtoArroz._id });
+  verificar(totalHistoricoDepois === totalHistoricoAntes,
+    'registrarPreco não cria duplicata na mesma compra/local/valor');
+
+  const duplicadoManual = await HistoricoPreco.create({
+    produto_id: produtoArroz._id,
+    estabelecimento_id: compraOriginal.estabelecimento_id,
+    compra_id: compraOriginal._id,
+    valor: 24.5,
+    data: new Date('2025-06-02T10:00:00Z')
+  });
+  const detalheCompactado = await req('GET', `/produtos/${arroz.id}`);
+  const registroAbc = detalheCompactado.json.historico.find((h) => h.valor === 24.5);
+  verificar(detalheCompactado.status === 200 && detalheCompactado.json.historico.length === 2 && registroAbc.observacoes >= 2,
+    'detalhe do produto compacta preço repetido do mesmo local e valor');
+  await HistoricoPreco.deleteOne({ _id: duplicadoManual._id });
 
   console.log('\n--- Compras ---');
   const compras = await req('GET', '/compras', null, token);

@@ -10,13 +10,31 @@ async function encontrarOuCriarProduto(nomeItem) {
 
 // Registra o preço no histórico e atualiza menor_preco / ultimo_preco do produto
 async function registrarPreco({ produto, estabelecimentoId, compraId, valor, data }) {
-  await HistoricoPreco.create({
+  const historicoExistente = await HistoricoPreco.findOne({
     produto_id: produto._id,
     estabelecimento_id: estabelecimentoId,
     compra_id: compraId,
-    valor,
-    data
+    valor
   });
+
+  if (historicoExistente) {
+    await HistoricoPreco.updateOne(
+      { _id: historicoExistente._id },
+      {
+        $max: { data },
+        $inc: { observacoes: 1 }
+      }
+    );
+  } else {
+    await HistoricoPreco.create({
+      produto_id: produto._id,
+      estabelecimento_id: estabelecimentoId,
+      compra_id: compraId,
+      valor,
+      data,
+      observacoes: 1
+    });
+  }
 
   const atualizacao = {};
   if (produto.menor_preco === null || produto.menor_preco === undefined || valor < produto.menor_preco) {
