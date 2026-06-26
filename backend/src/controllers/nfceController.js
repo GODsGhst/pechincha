@@ -128,12 +128,35 @@ async function buscarHtmlDaNfce(url) {
   throw new Error('Muitos redirecionamentos ao acessar NFC-e');
 }
 
+function atualizarLocalizacaoEmSegundoPlano(estabelecimentoId, endereco) {
+  if (!estabelecimentoId || !endereco) return;
+
+  geocodificarEndereco(endereco)
+    .then(async (coords) => {
+      if (!coords) return;
+      await Estabelecimento.updateOne(
+        {
+          _id: estabelecimentoId,
+          $or: [
+            { 'localizacao.lat': { $exists: false } },
+            { 'localizacao.lat': null }
+          ]
+        },
+        { $set: { localizacao: coords } }
+      );
+    })
+    .catch(() => {
+      // Geocodificação é enriquecimento secundário; não deve atrasar o scan.
+    });
+}
+
 // POST /api/nfce/processar — body: { imagem_base64 } OU { url_origem } OU { html }
 // Três formas de entrada:
 //  1. imagem_base64: foto do cupom — o back-end decodifica o QR Code (jimp + qrcode-reader)
 //  2. url_origem: URL já extraída do QR Code — o back-end busca o HTML
 //  3. html: HTML da página da NFC-e já capturado
 async function processar(req, res, next) {
+  const inicio = Date.now();
   try {
     const { html, imagem_base64 } = req.body || {};
     let { url_origem } = req.body || {};
@@ -209,7 +232,7 @@ async function processar(req, res, next) {
     // Deduplicação no nível do cupom: a mesma nota não pode ser importada
     // duas vezes (evita contar o mesmo preço em dobro no histórico).
     if (chaveAcesso) {
-      const jaImportada = await Compra.findOne({ chave_acesso: chaveAcesso });
+      const jaImportada = await Compra.findOne({ chave_acesso: chaveAcesso }).select('_id').lean();
       if (jaImportada) {
         return res.status(409).json({
           error: 'Este cupom fiscal já foi importado',
@@ -225,14 +248,12 @@ async function processar(req, res, next) {
       estabelecimento = await Estabelecimento.findOne({ cnpj: dados.estabelecimento.cnpj });
     }
     if (!estabelecimento) {
-      // Geocodifica o endereço extraído do cupom para o estabelecimento aparecer no mapa
-      const coords = await geocodificarEndereco(dados.estabelecimento.endereco);
       estabelecimento = await Estabelecimento.create({
         nome: dados.estabelecimento.nome || 'ESTABELECIMENTO NÃO IDENTIFICADO',
         cnpj: dados.estabelecimento.cnpj || `SEM-CNPJ-${Date.now()}`,
-        endereco: dados.estabelecimento.endereco,
-        localizacao: coords || undefined
+        endereco: dados.estabelecimento.endereco
       });
+      atualizarLocalizacaoEmSegundoPlano(estabelecimento._id, dados.estabelecimento.endereco);
     }
 
     const dataCompra = dados.data_compra || new Date();
@@ -241,9 +262,10 @@ async function processar(req, res, next) {
     let itensNovos = 0;
     const itensCompra = [];
     const precosParaRegistrar = [];
+    const contextoProdutos = compraService.criarContextoProdutos();
 
     for (const item of dados.itens) {
-      const { produto, novo } = await compraService.encontrarOuCriarProduto(item.nome);
+      const { produto, novo } = await compraService.encontrarOuCriarProduto(item.nome, contextoProdutos);
       if (novo) itensNovos += 1;
 
       itensCompra.push({
@@ -271,15 +293,18 @@ async function processar(req, res, next) {
       itens: itensCompra
     });
 
-    // Atualiza histórico de preços e menor/último preço de cada produto
-    for (const { produto, valor } of precosParaRegistrar) {
-      await compraService.registrarPreco({
+    // Atualiza histórico de preços e menor/último preço de cada produto em lote.
+    await compraService.registrarPrecosEmLote(precosParaRegistrar.map(({ produto, valor }) => ({
         produto,
         estabelecimentoId: estabelecimento._id,
         compraId: compra._id,
         valor,
         data: dataCompra
-      });
+    })));
+
+    const tempoMs = Date.now() - inicio;
+    if (tempoMs > 8000) {
+      console.warn('[NFC-e][LENTO] tempo=%dms itens=%d url=%s', tempoMs, itensCompra.length, url_origem || '(html direto)');
     }
 
     return res.status(201).json({
@@ -289,7 +314,8 @@ async function processar(req, res, next) {
       data_compra: compra.data_compra,
       valor_total: compra.valor_total,
       itens_processados: itensCompra.length,
-      itens_novos: itensNovos
+      itens_novos: itensNovos,
+      tempo_ms: tempoMs
     });
   } catch (err) {
     return next(err);

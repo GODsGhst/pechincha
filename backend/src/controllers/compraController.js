@@ -91,6 +91,7 @@ async function criar(req, res, next) {
 
     // Cada item precisa de nome (cria/associa produto) ou produto_id direto
     const itensValidados = [];
+    const contextoProdutos = compraService.criarContextoProdutos();
     for (const item of itens) {
       const { nome, produto_id, quantidade, valor_unitario } = item || {};
       const qtd = Number(quantidade);
@@ -113,7 +114,7 @@ async function criar(req, res, next) {
           return res.status(404).json({ error: `Produto não encontrado: ${produto_id}` });
         }
       } else {
-        ({ produto, novo } = await compraService.encontrarOuCriarProduto(nome.trim()));
+        ({ produto, novo } = await compraService.encontrarOuCriarProduto(nome.trim(), contextoProdutos));
       }
 
       itensValidados.push({
@@ -140,15 +141,13 @@ async function criar(req, res, next) {
       itens: itensValidados.map((v) => v.item)
     });
 
-    for (const { produto, item } of itensValidados) {
-      await compraService.registrarPreco({
+    await compraService.registrarPrecosEmLote(itensValidados.map(({ produto, item }) => ({
         produto,
         estabelecimentoId: estabelecimento._id,
         compraId: compra._id,
         valor: item.valor_unitario,
         data
-      });
-    }
+    })));
 
     return res.status(201).json({
       compra_id: compra._id,

@@ -14,9 +14,15 @@ const compraSchema = new mongoose.Schema({
   data_compra:        { type: Date, required: true },
   valor_total:        { type: Number, required: true },
   nfce_url:           { type: String },
-  chave_acesso:       { type: String, index: true }, // 44 dígitos — único por NFC-e, usado para evitar reimportação
+  chave_acesso:       { type: String }, // 44 dígitos — único por NFC-e, usado para evitar reimportação
   itens:              [itemCompraSchema],
   criado_em:          { type: Date, default: Date.now }
 });
+
+compraSchema.index(
+  { chave_acesso: 1 },
+  { unique: true, partialFilterExpression: { chave_acesso: { $type: 'string' } } }
+);
+compraSchema.index({ usuario_id: 1, data_compra: -1 });
 
 module.exports = mongoose.model('Compra', compraSchema);

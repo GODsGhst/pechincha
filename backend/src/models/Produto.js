@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const produtoSchema = new mongoose.Schema({
   nome:             { type: String, required: true, trim: true },
   nome_normalizado: { type: String, index: true }, // sem acento/caixa, p/ dedup e busca
+  chave_dedup:      { type: String, index: true, default: null }, // categoria|tipo|marca|tamanho|extras
   marca:            { type: String, default: null }, // opcional — null = sem marca
   categoria:        { type: String },
   tipo:             { type: String, default: null }, // ex.: detergente, refrigerante, arroz
@@ -16,5 +17,7 @@ const produtoSchema = new mongoose.Schema({
   },
   criado_em: { type: Date, default: Date.now }
 });
+
+produtoSchema.index({ categoria: 1, tipo: 1, marca: 1, quantidade_normalizada: 1 });
 
 module.exports = mongoose.model('Produto', produtoSchema);

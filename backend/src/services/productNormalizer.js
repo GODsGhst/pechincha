@@ -9,6 +9,8 @@ const Produto = require('../models/Produto');
 
 const LIMIAR_DEDUP = 0.22;
 const LIMIAR_BUSCA = 0.4;
+const CAMPOS_PRODUTO_DEDUP = 'nome nome_normalizado chave_dedup marca categoria tipo quantidade quantidade_normalizada menor_preco ultimo_preco criado_em';
+const MAX_PRODUTOS_FUZZY = 750;
 
 const STOPWORDS = new Set([
   'de', 'da', 'do', 'das', 'dos', 'e', 'com', 'sem', 'para', 'por', 'a', 'o',
@@ -368,12 +370,115 @@ function intersecaoTokens(a, b) {
   return iguais / Math.min(setA.size, setB.size);
 }
 
+function chaveDedupDaAnalise(analise) {
+  return analise && analise.confiavel ? analise.chave : null;
+}
+
+function criarContextoNormalizacao() {
+  return {
+    analisados: [],
+    consultas: new Map(),
+    todosCarregados: false,
+    porId: new Map(),
+    porChave: new Map()
+  };
+}
+
+function entradaDoProduto(produto) {
+  return { produto, analise: analiseDoProdutoSalvo(produto) };
+}
+
+function memorizarProduto(contexto, produto) {
+  if (!contexto || !produto || !produto._id) return;
+
+  const chaveId = String(produto._id);
+  const entrada = entradaDoProduto(produto);
+  contexto.porId.set(chaveId, entrada);
+
+  const chave = produto.chave_dedup || chaveDedupDaAnalise(entrada.analise);
+  if (chave && !contexto.porChave.has(chave)) {
+    contexto.porChave.set(chave, entrada);
+  }
+
+  const indice = contexto.analisados.findIndex((item) => String(item.produto._id) === chaveId);
+  if (indice >= 0) contexto.analisados[indice] = entrada;
+  else contexto.analisados.push(entrada);
+}
+
+async function buscarProdutoPorChave(chave, contexto) {
+  if (!chave) return null;
+
+  const emMemoria = contexto && contexto.porChave.get(chave);
+  if (emMemoria) return emMemoria.produto;
+
+  const produto = await Produto.findOne({ chave_dedup: chave }).select(CAMPOS_PRODUTO_DEDUP);
+  if (produto) memorizarProduto(contexto, produto);
+  return produto;
+}
+
+function montarQueryCandidatos(analise, filtros = {}) {
+  const query = {};
+
+  const categoria = filtros.categoria || analise.categoria;
+  const tipo = filtros.tipo || analise.tipo;
+  const marca = filtros.marca || analise.marca;
+  const quantidadeNormalizada = filtros.quantidade_normalizada || analise.quantidade_normalizada;
+
+  if (categoria) query.categoria = categoria;
+  if (tipo) query.tipo = tipo;
+  if (marca) query.marca = marca;
+  if (quantidadeNormalizada) query.quantidade_normalizada = quantidadeNormalizada;
+
+  return query;
+}
+
+async function carregarAnalisadosParaFuzzy(analise, contexto) {
+  let produtos = [];
+  const queryEscopo = montarQueryCandidatos(analise);
+  const chaveConsulta = JSON.stringify(queryEscopo);
+
+  if (contexto) {
+    if (contexto.todosCarregados) return contexto.analisados;
+    const emCache = contexto.consultas.get(chaveConsulta);
+    if (emCache) return emCache;
+  }
+
+  if (Object.keys(queryEscopo).length > 0) {
+    produtos = await Produto.find(queryEscopo)
+      .select(CAMPOS_PRODUTO_DEDUP)
+      .limit(MAX_PRODUTOS_FUZZY);
+  }
+
+  // Bancos antigos podem ainda não ter metadados suficientes. Esse fallback
+  // roda no máximo uma vez por nota quando usamos contexto.
+  if (produtos.length === 0) {
+    produtos = await Produto.find()
+      .select(CAMPOS_PRODUTO_DEDUP)
+      .sort({ criado_em: -1 })
+      .limit(MAX_PRODUTOS_FUZZY);
+    if (contexto) contexto.todosCarregados = true;
+  }
+
+  const analisados = produtos.map(entradaDoProduto);
+  if (contexto) {
+    for (const entrada of analisados) memorizarProduto(contexto, entrada.produto);
+    const analisadosDoContexto = analisados
+      .map((entrada) => contexto.porId.get(String(entrada.produto._id)))
+      .filter(Boolean);
+    contexto.consultas.set(chaveConsulta, analisadosDoContexto);
+  }
+
+  return analisados;
+}
+
 async function enriquecerProduto(produto, analise, nomeNovo) {
   const set = {};
   const normalizadoExibicao = normalizarTexto(nomeNovo);
+  const chaveDedup = chaveDedupDaAnalise(analise);
   if (!produto.nome_normalizado || produto.nome_normalizado !== normalizadoExibicao) {
     set.nome_normalizado = normalizadoExibicao;
   }
+  if (chaveDedup && produto.chave_dedup !== chaveDedup) set.chave_dedup = chaveDedup;
   if (!produto.categoria && analise.categoria) set.categoria = analise.categoria;
   if (!produto.marca && analise.marca) set.marca = analise.marca;
   if (!produto.tipo && analise.tipo) set.tipo = analise.tipo;
@@ -389,20 +494,30 @@ async function enriquecerProduto(produto, analise, nomeNovo) {
   return produto;
 }
 
-async function encontrarOuCriarProduto(nomeBruto) {
+async function encontrarOuCriarProduto(nomeBruto, contexto = null) {
   const nome = limparNome(nomeBruto) || 'PRODUTO';
   const analise = analisarProduto(nome);
   const nomeExibicao = formatarNomeProduto(nome, analise);
   const nomeNormalizado = normalizarTexto(nomeExibicao);
+  const chaveDedup = chaveDedupDaAnalise(analise);
 
-  const produtos = await Produto.find();
-  if (produtos.length > 0) {
-    const analisados = produtos.map((produto) => ({ produto, analise: analiseDoProdutoSalvo(produto) }));
+  if (chaveDedup) {
+    const produtoPorChave = await buscarProdutoPorChave(chaveDedup, contexto);
+    if (produtoPorChave) {
+      const produto = await enriquecerProduto(produtoPorChave, analise, nomeExibicao);
+      memorizarProduto(contexto, produto);
+      return { produto, novo: false };
+    }
+  }
+
+  const analisados = await carregarAnalisadosParaFuzzy(analise, contexto);
+  if (analisados.length > 0) {
 
     if (analise.confiavel) {
       const exato = analisados.find((entrada) => entrada.analise.confiavel && entrada.analise.chave === analise.chave);
       if (exato) {
         const produto = await enriquecerProduto(exato.produto, analise, nomeExibicao);
+        memorizarProduto(contexto, produto);
         return { produto, novo: false };
       }
     }
@@ -417,6 +532,7 @@ async function encontrarOuCriarProduto(nomeBruto) {
 
     if (melhor && (melhor.score <= LIMIAR_DEDUP || intersecaoTokens(analise, melhor.item.ref.analise) >= 0.8)) {
       const produto = await enriquecerProduto(melhor.item.ref.produto, analise, nomeExibicao);
+      memorizarProduto(contexto, produto);
       return { produto, novo: false };
     }
   }
@@ -424,12 +540,14 @@ async function encontrarOuCriarProduto(nomeBruto) {
   const criado = await Produto.create({
     nome: nomeExibicao,
     nome_normalizado: nomeNormalizado,
+    chave_dedup: chaveDedup,
     categoria: analise.categoria,
     marca: analise.marca,
     tipo: analise.tipo,
     quantidade: analise.quantidade,
     quantidade_normalizada: analise.quantidade_normalizada
   });
+  memorizarProduto(contexto, criado);
   return { produto: criado, novo: true };
 }
 
@@ -437,13 +555,27 @@ async function buscarProdutos(descricao, filtros = {}) {
   const analiseBusca = analisarProduto(descricao);
   if (!analiseBusca.normalizado) return [];
 
-  const query = {};
+  const query = montarQueryCandidatos(analiseBusca, {
+    categoria: filtros.categoria,
+    tipo: filtros.tipo,
+    marca: filtros.marca,
+    quantidade_normalizada: filtros.quantidade
+      ? normalizarQuantidades(extrairQuantidades(prepararTextoComparacao(filtros.quantidade)))
+      : undefined
+  });
+
   if (filtros.categoria) query.categoria = new RegExp(`^${escapeRegex(filtros.categoria)}$`, 'i');
   if (filtros.tipo) query.tipo = new RegExp(`^${escapeRegex(filtros.tipo)}$`, 'i');
   if (filtros.marca) query.marca = new RegExp(`^${escapeRegex(filtros.marca)}$`, 'i');
   if (filtros.quantidade) query.quantidade = new RegExp(`^${escapeRegex(filtros.quantidade)}$`, 'i');
 
-  const produtos = await Produto.find(query);
+  const chaveBusca = chaveDedupDaAnalise(analiseBusca);
+  if (chaveBusca) {
+    const exatos = await Produto.find({ ...query, chave_dedup: chaveBusca }).limit(20);
+    if (exatos.length > 0) return exatos;
+  }
+
+  const produtos = await Produto.find(query).limit(MAX_PRODUTOS_FUZZY);
   if (produtos.length === 0) return [];
 
   const entradas = produtos.map((p) => {
@@ -469,6 +601,7 @@ async function buscarProdutos(descricao, filtros = {}) {
 
 module.exports = {
   encontrarOuCriarProduto,
+  criarContextoNormalizacao,
   buscarProdutos,
   normalizarTexto,
   tokenizar,

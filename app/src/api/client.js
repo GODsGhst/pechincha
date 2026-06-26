@@ -37,8 +37,14 @@ export function setAuthToken(token) {
   authToken = token;
 }
 
-async function request(metodo, caminho, corpo) {
+async function request(metodo, caminho, corpo, opcoes = {}) {
   let resposta;
+  const timeoutMs = opcoes.timeoutMs || 60000;
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeout = controller
+    ? setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+
   try {
     resposta = await fetch(API_BASE + caminho, {
       method: metodo,
@@ -47,11 +53,18 @@ async function request(metodo, caminho, corpo) {
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
       body: corpo ? JSON.stringify(corpo) : undefined,
+      signal: controller ? controller.signal : undefined,
     });
   } catch (e) {
-    const erro = new Error(`Falha de conexão com a API em ${API_BASE}`);
+    const abortou = e && (e.name === 'AbortError' || controller?.signal?.aborted);
+    const erro = new Error(abortou
+      ? 'A API demorou demais para responder. Tente novamente em alguns segundos.'
+      : `Falha de conexão com a API em ${API_BASE}`);
     erro.cause = e;
+    erro.status = abortou ? 'timeout' : undefined;
     throw erro;
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 
   let json = null;
@@ -71,8 +84,8 @@ async function request(metodo, caminho, corpo) {
 }
 
 export const api = {
-  get: (caminho) => request('GET', caminho),
-  post: (caminho, corpo) => request('POST', caminho, corpo),
-  put: (caminho, corpo) => request('PUT', caminho, corpo),
-  delete: (caminho) => request('DELETE', caminho),
+  get: (caminho, opcoes) => request('GET', caminho, undefined, opcoes),
+  post: (caminho, corpo, opcoes) => request('POST', caminho, corpo, opcoes),
+  put: (caminho, corpo, opcoes) => request('PUT', caminho, corpo, opcoes),
+  delete: (caminho, opcoes) => request('DELETE', caminho, undefined, opcoes),
 };

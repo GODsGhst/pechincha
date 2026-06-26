@@ -37,6 +37,7 @@ async function atualizarProduto(produto, analise) {
   const atualizacao = {
     nome: nomeExibicao,
     nome_normalizado: normalizarTexto(nomeExibicao),
+    chave_dedup: analise.confiavel ? analise.chave : null,
     categoria: produto.categoria || analise.categoria,
     tipo: produto.tipo || analise.tipo,
     marca: produto.marca || analise.marca,

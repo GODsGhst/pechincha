@@ -14,6 +14,39 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
+function criarLimitador({ janelaMs, maximo, nome }) {
+  const acessos = new Map();
+
+  setInterval(() => {
+    const agora = Date.now();
+    for (const [chave, item] of acessos.entries()) {
+      if (agora - item.inicio > janelaMs) acessos.delete(chave);
+    }
+  }, janelaMs).unref();
+
+  return (req, res, next) => {
+    if (req.method === 'OPTIONS') return next();
+
+    const agora = Date.now();
+    const chave = `${nome}:${req.ip || req.headers['x-forwarded-for'] || 'anon'}`;
+    const atual = acessos.get(chave);
+
+    if (!atual || agora - atual.inicio > janelaMs) {
+      acessos.set(chave, { inicio: agora, total: 1 });
+      return next();
+    }
+
+    atual.total += 1;
+    if (atual.total > maximo) {
+      const retryAfter = Math.ceil((janelaMs - (agora - atual.inicio)) / 1000);
+      res.setHeader('Retry-After', String(retryAfter));
+      return res.status(429).json({ error: 'Muitas tentativas. Aguarde um pouco e tente novamente.' });
+    }
+
+    return next();
+  };
+}
+
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -47,6 +80,13 @@ app.use(express.json({ limit: '15mb' }));
 app.get('/', (_req, res) => {
   res.json({ message: 'API do Comparador de Preços por Cupons Fiscais', versao: '1.0.0' });
 });
+
+const limitadorAuth = criarLimitador({ nome: 'auth', janelaMs: 15 * 60 * 1000, maximo: 30 });
+const limitadorNfce = criarLimitador({ nome: 'nfce', janelaMs: 60 * 1000, maximo: 20 });
+
+app.use('/api/auth/login', limitadorAuth);
+app.use('/api/auth/register', limitadorAuth);
+app.use('/api/nfce/processar', limitadorNfce);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/produtos', produtoRoutes);

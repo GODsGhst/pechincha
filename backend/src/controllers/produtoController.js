@@ -289,6 +289,7 @@ async function criar(req, res, next) {
     const produto = await Produto.create({
       nome: nomeExibicao,
       nome_normalizado: productNormalizer.normalizarTexto(nomeExibicao),
+      chave_dedup: analise.confiavel ? analise.chave : null,
       categoria: analise.categoria,
       tipo: analise.tipo,
       marca: analise.marca,
@@ -318,6 +319,7 @@ async function atualizar(req, res, next) {
       const nomeExibicao = productNormalizer.formatarNomeProduto(nome, analise);
       atualizacao.nome = nomeExibicao;
       atualizacao.nome_normalizado = productNormalizer.normalizarTexto(nomeExibicao);
+      atualizacao.chave_dedup = analise.confiavel ? analise.chave : null;
       if (categoria === undefined) atualizacao.categoria = analise.categoria;
       if (tipo === undefined) atualizacao.tipo = analise.tipo;
       if (marca === undefined) atualizacao.marca = analise.marca;

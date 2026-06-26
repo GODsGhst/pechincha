@@ -3,7 +3,7 @@
 // envia pro backend, que faz parsing, cadastro e análise. Só o RESULTADO
 // volta pro app — nenhuma regra de negócio ou dado fica no dispositivo.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, scanFromURLAsync, useCameraPermissions } from 'expo-camera';
@@ -20,13 +20,43 @@ export default function ScanScreen({ navigation }) {
   const [processando, setProcessando] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [erro, setErro] = useState(null);
+  const [etapa, setEtapa] = useState('');
+  const [segundos, setSegundos] = useState(0);
+
+  useEffect(() => {
+    if (!processando) {
+      setSegundos(0);
+      return undefined;
+    }
+
+    const inicio = Date.now();
+    const timer = setInterval(() => {
+      const decorrido = Math.floor((Date.now() - inicio) / 1000);
+      setSegundos(decorrido);
+      if (decorrido >= 14) setEtapa('Salvando preços e organizando produtos...');
+      else if (decorrido >= 5) setEtapa('Consultando a página da NFC-e...');
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [processando]);
+
+  function iniciarProcessamento(mensagem) {
+    setProcessando(true);
+    setEtapa(mensagem);
+    setSegundos(0);
+    setErro(null);
+  }
+
+  function mensagemProcessamento() {
+    if (!processando) return 'Posicione o QR Code dentro da moldura';
+    return segundos >= 3 ? `${etapa} ${segundos}s` : etapa;
+  }
 
   async function processarUrl(url) {
     const urlLimpa = String(url || '').trim();
-    setProcessando(true);
-    setErro(null);
+    iniciarProcessamento('QR encontrado. Buscando dados do cupom...');
     try {
-      const r = await api.post('/nfce/processar', { url_origem: urlLimpa });
+      const r = await api.post('/nfce/processar', { url_origem: urlLimpa }, { timeoutMs: 90000 });
       setResultado(r);
     } catch (e) {
       if (e.status === 409) {
@@ -42,10 +72,9 @@ export default function ScanScreen({ navigation }) {
   // Testar com uma foto salva: envia a imagem ao backend, que decodifica o
   // QR (jimp + qrcode-reader), busca a SEFAZ e analisa.
   async function processarImagem(imagemBase64) {
-    setProcessando(true);
-    setErro(null);
+    iniciarProcessamento('Lendo imagem e procurando QR Code...');
     try {
-      const r = await api.post('/nfce/processar', { imagem_base64: imagemBase64 });
+      const r = await api.post('/nfce/processar', { imagem_base64: imagemBase64 }, { timeoutMs: 90000 });
       setResultado(r);
     } catch (e) {
       if (e.status === 409) {
@@ -74,6 +103,7 @@ export default function ScanScreen({ navigation }) {
       }
 
       setLido(true);
+      setEtapa('Lendo QR Code da imagem...');
 
       try {
         const codigos = await scanFromURLAsync(asset.uri, ['qr']);
@@ -96,6 +126,7 @@ export default function ScanScreen({ navigation }) {
     if (lido || processando) return;
     const texto = String(data || '').trim();
     setLido(true);
+    setEtapa('QR encontrado. Validando cupom...');
     if (!/^https?:\/\//i.test(texto)) {
       setErro('Este QR Code não é de um cupom fiscal (NFC-e).');
       return;
@@ -107,6 +138,8 @@ export default function ScanScreen({ navigation }) {
     setLido(false);
     setResultado(null);
     setErro(null);
+    setEtapa('');
+    setSegundos(0);
   }
 
   // Permissão ainda não resolvida
@@ -178,7 +211,7 @@ export default function ScanScreen({ navigation }) {
             <View style={[styles.canto, styles.cantoBR]} />
           </View>
           <Text style={styles.dica}>
-            {processando ? 'Processando cupom…' : 'Posicione o QR Code dentro da moldura'}
+            {mensagemProcessamento()}
           </Text>
           {processando && <ActivityIndicator color={colors.white} style={{ marginTop: 12 }} />}
           {erro && !processando && (
