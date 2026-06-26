@@ -142,6 +142,9 @@ async function main() {
   const login = await req('POST', '/auth/login', { email: 'joao@email.com', senha: 'senha123' });
   verificar(login.status === 200 && !!login.json.token, 'login retorna 200 + token');
   const token = login.json.token;
+  const me = await req('GET', '/auth/me', null, token);
+  verificar(me.status === 200 && me.json.usuario.email === 'joao@email.com',
+    'auth/me retorna usuário atual autenticado');
 
   const loginErrado = await req('POST', '/auth/login', { email: 'joao@email.com', senha: 'errada' });
   verificar(loginErrado.status === 401, 'login com senha errada retorna 401');

@@ -26,6 +26,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import ProductScreen from './src/screens/ProductScreen';
 import AreaScreen from './src/screens/AreaScreen';
 import ReceiptScreen from './src/screens/ReceiptScreen';
+import AdminScreen from './src/screens/AdminScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -62,6 +63,7 @@ function Rotas() {
           <Stack.Screen name="Product" component={ProductScreen} />
           <Stack.Screen name="Receipt" component={ReceiptScreen} />
           <Stack.Screen name="Area" component={AreaScreen} />
+          <Stack.Screen name="Admin" component={AdminScreen} />
         </>
       ) : (
         <Stack.Screen name="Login" component={LoginScreen} />

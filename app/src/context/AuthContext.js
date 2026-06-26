@@ -22,6 +22,19 @@ export function AuthProvider({ children }) {
           setAuthToken(token);
           const dados = await SecureStore.getItemAsync('pechincha.usuario');
           if (dados) setUsuario(JSON.parse(dados));
+
+          try {
+            const { usuario: usuarioAtual } = await api.get('/auth/me');
+            if (usuarioAtual) {
+              await SecureStore.setItemAsync('pechincha.usuario', JSON.stringify(usuarioAtual));
+              setUsuario(usuarioAtual);
+            }
+          } catch (_erroSessao) {
+            setAuthToken(null);
+            await SecureStore.deleteItemAsync(TOKEN_KEY);
+            await SecureStore.deleteItemAsync('pechincha.usuario');
+            setUsuario(null);
+          }
         }
       } catch (_e) {
         // sessão inválida — segue deslogado

@@ -8,6 +8,7 @@ const limitarAuth = rateLimit({ janelaMs: 15 * 60 * 1000, max: 20 });
 
 router.post('/register', limitarAuth, authController.register);
 router.post('/login', limitarAuth, authController.login);
+router.get('/me', authMiddleware, authController.me);
 router.delete('/me', authMiddleware, authController.removerConta);
 
 module.exports = router;

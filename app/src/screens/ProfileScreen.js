@@ -70,8 +70,27 @@ export default function ProfileScreen({ navigation }) {
         <View style={{ flex: 1 }}>
           <Text style={styles.nome}>{usuario?.nome || 'Você'}</Text>
           <Text style={styles.email}>{usuario?.email}</Text>
+          {usuario?.papel === 'admin' && (
+            <View style={styles.adminPill}>
+              <Ionicons name="shield-checkmark" size={12} color={colors.brandDark} />
+              <Text style={styles.adminPillTexto}>admin</Text>
+            </View>
+          )}
         </View>
       </View>
+
+      {usuario?.papel === 'admin' && (
+        <Pressable style={styles.adminCard} onPress={() => navigation.navigate('Admin')}>
+          <View style={styles.adminIcone}>
+            <Ionicons name="construct-outline" size={20} color={colors.brandDark} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.adminTitulo}>Painel admin</Text>
+            <Text style={styles.adminTexto}>Produtos, usuários e importações</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.inkMuted} />
+        </Pressable>
+      )}
 
       <View style={styles.colabCard}>
         <View>
@@ -134,6 +153,12 @@ const styles = StyleSheet.create({
   avatarTexto: { fontFamily: fonts.display, fontSize: 22, color: colors.brandDark },
   nome: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   email: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, marginTop: 2 },
+  adminPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3, marginTop: 6 },
+  adminPillTexto: { fontFamily: fonts.semibold, fontSize: 10.5, color: colors.brandDark },
+  adminCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 14, marginTop: 18 },
+  adminIcone: { width: 38, height: 38, borderRadius: radius.md, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
+  adminTitulo: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
+  adminTexto: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkSoft, marginTop: 2 },
   colabCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.brandDark, borderRadius: radius.lg, padding: 16, marginTop: 20 },
   colabLabel: { fontFamily: fonts.semibold, fontSize: 14, color: colors.white },
   colabTexto: { fontFamily: fonts.body, fontSize: 12, color: '#9FD9BC', marginTop: 2, maxWidth: 200 },

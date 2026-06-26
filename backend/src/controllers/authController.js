@@ -85,6 +85,19 @@ async function login(req, res, next) {
   }
 }
 
+async function me(req, res, next) {
+  try {
+    const usuario = await Usuario.findById(req.usuario.id);
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    return res.json({ usuario: formatarUsuario(usuario) });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function removerConta(req, res, next) {
   try {
     const usuario = await Usuario.findById(req.usuario.id).select('papel');
@@ -120,4 +133,4 @@ async function removerConta(req, res, next) {
   }
 }
 
-module.exports = { register, login, removerConta };
+module.exports = { register, login, me, removerConta };
