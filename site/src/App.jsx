@@ -253,7 +253,10 @@ function ReceiptDetail({ receipt, onClose }) {
       <div className="receipt-items">
         {(receipt.itens || []).map((item, index) => (
           <article key={`${item.produto_id || item.nome_original || index}-${index}`} className="receipt-product">
-            <div>
+            <div className="product-icon compact">
+              {item.imagem_url ? <img src={item.imagem_url} alt="" loading="lazy" /> : <ShoppingCart size={16} />}
+            </div>
+            <div className="receipt-product-main">
               <h4>{item.produto || item.nome_original || 'Produto'}</h4>
               {productMeta(item) && <p>{productMeta(item)}</p>}
               {item.nome_original && item.produto && item.nome_original !== item.produto && <em>{item.nome_original}</em>}

@@ -659,10 +659,15 @@ select:focus {
 
 .receipt-product {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
   gap: 10px;
+  align-items: start;
   border-top: 1px solid #e7e4da;
   padding-top: 8px;
+}
+
+.receipt-product-main {
+  min-width: 0;
 }
 
 .receipt-product h4 {

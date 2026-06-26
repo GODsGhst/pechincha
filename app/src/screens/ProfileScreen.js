@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Alert, View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { Alert, View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,16 +25,22 @@ export default function ProfileScreen({ navigation }) {
   const { usuario, logout, excluirConta } = useAuth();
   const [compras, setCompras] = useState([]);
   const [carregando, setCarregando] = useState(true);
+  const [atualizando, setAtualizando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
 
-  const carregar = useCallback(async () => {
+  const carregar = useCallback(async (manual = false) => {
+    if (manual) setAtualizando(true);
     try {
-      const { compras: c } = await api.get('/compras');
+      const { compras: c } = await api.get('/compras', {
+        cacheMs: 30000,
+        forceRefresh: manual
+      });
       setCompras(c || []);
     } catch (_e) {
       setCompras([]);
     } finally {
       setCarregando(false);
+      if (manual) setAtualizando(false);
     }
   }, []);
 
@@ -64,7 +70,11 @@ export default function ProfileScreen({ navigation }) {
   }
 
   return (
-    <ScrollView style={styles.tela} contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 120, paddingHorizontal: 16 }}>
+    <ScrollView
+      style={styles.tela}
+      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 120, paddingHorizontal: 16 }}
+      refreshControl={<RefreshControl refreshing={atualizando} onRefresh={() => carregar(true)} tintColor={colors.brand} />}
+    >
       <View style={styles.topo}>
         <View style={styles.avatar}><Text style={styles.avatarTexto}>{iniciais(usuario?.nome)}</Text></View>
         <View style={{ flex: 1 }}>

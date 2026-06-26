@@ -15,6 +15,7 @@ export default function CartScreen({ navigation }) {
     remover,
     alternar,
     alterarQuantidade,
+    carregarLista,
     carregando: carregandoLista,
     erro: erroLista
   } = useCart();
@@ -157,6 +158,8 @@ export default function CartScreen({ navigation }) {
       <FlatList
         data={itens}
         keyExtractor={(item) => item.id}
+        refreshing={carregandoLista}
+        onRefresh={carregarLista}
         contentContainerStyle={{ padding: 16, paddingTop: 12, paddingBottom: 180 }}
         ListHeaderComponent={
           <>

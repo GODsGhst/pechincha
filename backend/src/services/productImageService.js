@@ -57,6 +57,26 @@ const IMAGENS = [
     credito: 'Wikimedia Commons'
   },
   {
+    tipo: 'Álcool',
+    url: commons('Laundry_detergents.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Guardanapo',
+    url: commons('Paper_napkin.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Creme dental',
+    url: commons('Toothpasteonbrush.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Desodorante',
+    url: commons('Deodorant.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
     tipo: 'Hambúrguer',
     url: commons('Hamburger_(black_bg).jpg'),
     credito: 'Wikimedia Commons'
@@ -64,6 +84,26 @@ const IMAGENS = [
   {
     tipo: 'Bombom',
     url: commons('Chocolate.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Chocolate',
+    url: commons('Chocolate.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Bala',
+    url: commons('Candy.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Goma',
+    url: commons('Chewing_gum_stick.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Iogurte',
+    url: commons('Yogurt.jpg'),
     credito: 'Wikimedia Commons'
   },
   {
@@ -97,6 +137,21 @@ const IMAGENS = [
     credito: 'Wikimedia Commons'
   },
   {
+    tipo: 'Água',
+    url: commons('Bottled_water.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Cerveja',
+    url: commons('Beer_glass.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    tipo: 'Isotônico',
+    url: commons('Bottled_water.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
     tipo: 'Tomate',
     url: commons('Tomato_je.jpg'),
     credito: 'Wikimedia Commons'
@@ -109,6 +164,21 @@ const IMAGENS = [
   {
     tipo: 'Banana',
     url: commons('Bananavarieties.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    categoria: 'Hortifruti',
+    url: commons('Vegetables.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    categoria: 'Açougue',
+    url: commons('Beef.jpg'),
+    credito: 'Wikimedia Commons'
+  },
+  {
+    categoria: 'Higiene',
+    url: commons('Toothpasteonbrush.jpg'),
     credito: 'Wikimedia Commons'
   }
 ];

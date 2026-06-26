@@ -3,6 +3,7 @@ const Compra = require('../models/Compra');
 const Estabelecimento = require('../models/Estabelecimento');
 const Produto = require('../models/Produto');
 const compraService = require('../services/compraService');
+const productImageService = require('../services/productImageService');
 const displayFormatter = require('../services/displayFormatter');
 
 function idValido(id) {
@@ -22,18 +23,25 @@ function formatar(compra) {
     recebido_em: compra.recebido_em || compra.criado_em || null,
     processado_em: compra.processado_em || null,
     tempo_processamento_ms: compra.tempo_processamento_ms || null,
-    itens: compra.itens.map((i) => ({
-      produto_id: i.produto_id && i.produto_id.nome ? i.produto_id._id : i.produto_id,
-      produto: i.produto_id && i.produto_id.nome ? displayFormatter.formatarNomeProduto(i.produto_id) : null,
-      categoria: i.produto_id && i.produto_id.categoria ? i.produto_id.categoria : null,
-      tipo: i.produto_id && i.produto_id.tipo ? i.produto_id.tipo : null,
-      marca: i.produto_id && i.produto_id.marca ? i.produto_id.marca : null,
-      quantidade_produto: i.produto_id && i.produto_id.quantidade ? i.produto_id.quantidade : null,
-      nome_original: i.nome_original ? displayFormatter.formatarNomeProduto(i.nome_original) : null,
-      quantidade: i.quantidade,
-      valor_unitario: i.valor_unitario,
-      valor_total: i.valor_total
-    }))
+    itens: compra.itens.map((i) => {
+      const produto = i.produto_id && i.produto_id.nome ? i.produto_id : null;
+      const imagem = produto ? productImageService.imagemDoProduto(produto) : { url: null, credito: null };
+
+      return {
+        produto_id: produto ? produto._id : i.produto_id,
+        produto: produto ? displayFormatter.formatarNomeProduto(produto) : null,
+        categoria: produto && produto.categoria ? produto.categoria : null,
+        tipo: produto && produto.tipo ? produto.tipo : null,
+        marca: produto && produto.marca ? produto.marca : null,
+        quantidade_produto: produto && produto.quantidade ? produto.quantidade : null,
+        imagem_url: imagem.url,
+        imagem_credito: imagem.credito,
+        nome_original: i.nome_original ? displayFormatter.formatarNomeProduto(i.nome_original) : null,
+        quantidade: i.quantidade,
+        valor_unitario: i.valor_unitario,
+        valor_total: i.valor_total
+      };
+    })
   };
 }
 
@@ -45,7 +53,7 @@ async function listar(req, res, next) {
       .sort({ recebido_em: -1, data_compra: -1 })
       .limit(limite)
       .populate('estabelecimento_id', 'nome')
-      .populate('itens.produto_id', 'nome categoria tipo marca quantidade');
+      .populate('itens.produto_id', 'nome categoria tipo marca quantidade imagem_url imagem_credito');
 
     return res.json({ compras: compras.map(formatar) });
   } catch (err) {
@@ -62,7 +70,7 @@ async function detalhar(req, res, next) {
 
     const compra = await Compra.findOne({ _id: req.params.id, usuario_id: req.usuario.id })
       .populate('estabelecimento_id', 'nome')
-      .populate('itens.produto_id', 'nome categoria tipo marca quantidade');
+      .populate('itens.produto_id', 'nome categoria tipo marca quantidade imagem_url imagem_credito');
 
     if (!compra) {
       return res.status(404).json({ error: 'Compra não encontrada' });
@@ -206,7 +214,7 @@ async function atualizar(req, res, next) {
 
     const populada = await Compra.findById(compra._id)
       .populate('estabelecimento_id', 'nome')
-      .populate('itens.produto_id', 'nome categoria tipo marca quantidade');
+      .populate('itens.produto_id', 'nome categoria tipo marca quantidade imagem_url imagem_credito');
 
     return res.json(formatar(populada));
   } catch (err) {

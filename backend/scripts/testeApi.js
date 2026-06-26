@@ -366,6 +366,9 @@ async function main() {
     'item da notinha preserva quantidade e valor unitário');
   verificar(compraDetalhe.json.itens[0].quantidade_produto === '5kg',
     'item da notinha mostra quantidade/tamanho do produto');
+  verificar(typeof compraDetalhe.json.itens[0].imagem_url === 'string' &&
+    compraDetalhe.json.itens[0].imagem_url.length > 0,
+    'item da notinha retorna imagem do produto');
 
   console.log('\n--- Comparação (compra salva e cesta livre) ---');
   const total = await req('GET', `/comparacao/compras/${compraId}?visao=total`, null, token);

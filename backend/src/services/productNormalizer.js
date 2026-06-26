@@ -36,24 +36,29 @@ const TIPOS = [
   { tipo: 'Refrigerante', categoria: 'Bebidas', aliases: ['refrigerante', 'refri', 'coca cola', 'cocacola', 'cola', 'guarana', 'guaraná', 'fanta', 'sprite', 'pepsi'] },
   { tipo: 'Água', categoria: 'Bebidas', aliases: ['agua', 'água', 'mineral'] },
   { tipo: 'Suco', categoria: 'Bebidas', aliases: ['suco', 'nectar', 'néctar'] },
-  { tipo: 'Cerveja', categoria: 'Bebidas', aliases: ['cerveja', 'long neck', 'latinha'] },
+  { tipo: 'Cerveja', categoria: 'Bebidas', aliases: ['cerveja', 'cerv', 'long neck', 'latinha'] },
+  { tipo: 'Isotônico', categoria: 'Bebidas', aliases: ['isotonico', 'isotônico', 'gatorade'] },
   { tipo: 'Leite', categoria: 'Bebidas', aliases: ['leite', 'integral', 'desnatado', 'semidesnatado'] },
 
   { tipo: 'Detergente', categoria: 'Limpeza', aliases: ['detergente', 'detengerte', 'deterg', 'det', 'lava loucas', 'lava louças'] },
   { tipo: 'Amaciante', categoria: 'Limpeza', aliases: ['amaciante', 'amac'] },
   { tipo: 'Sabão', categoria: 'Limpeza', aliases: ['sabao', 'sabão', 'sabao po', 'sabão pó', 'lava roupas'] },
   { tipo: 'Desinfetante', categoria: 'Limpeza', aliases: ['desinfetante', 'desinf'] },
-  { tipo: 'Água sanitária', categoria: 'Limpeza', aliases: ['agua sanitaria', 'água sanitária', 'sanitaria', 'sanitária'] },
+  { tipo: 'Água sanitária', categoria: 'Limpeza', aliases: ['agua sanitaria', 'água sanitária', 'sanitaria', 'sanitária', 'sanit'] },
+  { tipo: 'Álcool', categoria: 'Limpeza', aliases: ['alcool', 'álcool'] },
   { tipo: 'Limpa alumínio', categoria: 'Limpeza', aliases: ['limpa aluminio', 'limpa alumínio', 'brilha aluminio', 'brilhaluminio', 'aluminio', 'alum', 'limp'] },
   { tipo: 'Limpador', categoria: 'Limpeza', aliases: ['limpador', 'multiuso', 'limpa', 'limp'] },
   { tipo: 'Esponja', categoria: 'Limpeza', aliases: ['esponja', 'bombril', 'palha aco', 'palha aço'] },
+  { tipo: 'Guardanapo', categoria: 'Limpeza', aliases: ['guardanapo', 'guard'] },
 
   { tipo: 'Papel higiênico', categoria: 'Higiene', aliases: ['papel higienico', 'papel higiênico'] },
   { tipo: 'Sabonete', categoria: 'Higiene', aliases: ['sabonete'] },
   { tipo: 'Shampoo', categoria: 'Higiene', aliases: ['shampoo', 'xampu'] },
   { tipo: 'Condicionador', categoria: 'Higiene', aliases: ['condicionador'] },
-  { tipo: 'Creme dental', categoria: 'Higiene', aliases: ['creme dental', 'pasta dental'] },
-  { tipo: 'Desodorante', categoria: 'Higiene', aliases: ['desodorante', 'desod'] },
+  { tipo: 'Creme dental', categoria: 'Higiene', aliases: ['creme dental', 'pasta dental', 'cr dental', 'cr.dental', 'dent'] },
+  { tipo: 'Desodorante', categoria: 'Higiene', aliases: ['desodorante', 'desod', 'desod.nivea'] },
+  { tipo: 'Barbeador', categoria: 'Higiene', aliases: ['barb', 'barbear', 'barbeador'] },
+  { tipo: 'Hidratante', categoria: 'Higiene', aliases: ['hidratante', 'hidrat', 'cr hidratante', 'cr.hidratante'] },
   { tipo: 'Absorvente', categoria: 'Higiene', aliases: ['absorvente'] },
 
   { tipo: 'Arroz', categoria: 'Alimentos', aliases: ['arroz'] },
@@ -66,6 +71,12 @@ const TIPOS = [
   { tipo: 'Biscoito', categoria: 'Alimentos', aliases: ['biscoito', 'bolacha'] },
   { tipo: 'Molho', categoria: 'Alimentos', aliases: ['molho', 'extrato tomate'] },
   { tipo: 'Sal', categoria: 'Alimentos', aliases: ['sal'] },
+  { tipo: 'Iogurte', categoria: 'Alimentos', aliases: ['iogurte', 'beb lactea', 'lactea'] },
+  { tipo: 'Bala', categoria: 'Alimentos', aliases: ['bala', 'drops', 'azedo', 'azedinho'] },
+  { tipo: 'Goma', categoria: 'Alimentos', aliases: ['goma', 'mascar', 'chiclete'] },
+  { tipo: 'Chocolate', categoria: 'Alimentos', aliases: ['choc', 'chocolate', 'kitkat', 'kit kat', 'nutella'] },
+  { tipo: 'Bolo', categoria: 'Alimentos', aliases: ['bolo'] },
+  { tipo: 'Chá', categoria: 'Alimentos', aliases: ['cha', 'chá', 'camomila'] },
 
   { tipo: 'Carne', categoria: 'Açougue', aliases: ['carne', 'bovino', 'patinho', 'acem', 'acém', 'alcatra'] },
   { tipo: 'Frango', categoria: 'Açougue', aliases: ['frango', 'peito frango', 'coxa', 'sobrecoxa'] },
@@ -78,7 +89,15 @@ const TIPOS = [
   { tipo: 'Tomate', categoria: 'Hortifruti', aliases: ['tomate'] },
   { tipo: 'Cebola', categoria: 'Hortifruti', aliases: ['cebola'] },
   { tipo: 'Batata', categoria: 'Hortifruti', aliases: ['batata'] },
-  { tipo: 'Alface', categoria: 'Hortifruti', aliases: ['alface'] }
+  { tipo: 'Alface', categoria: 'Hortifruti', aliases: ['alface'] },
+  { tipo: 'Abóbora', categoria: 'Hortifruti', aliases: ['abobora', 'abóbora'] },
+  { tipo: 'Beterraba', categoria: 'Hortifruti', aliases: ['beterraba'] },
+  { tipo: 'Chuchu', categoria: 'Hortifruti', aliases: ['chuchu'] },
+  { tipo: 'Laranja', categoria: 'Hortifruti', aliases: ['laranja'] },
+  { tipo: 'Couve', categoria: 'Hortifruti', aliases: ['couve'] },
+  { tipo: 'Cenoura', categoria: 'Hortifruti', aliases: ['cenoura'] },
+  { tipo: 'Abacate', categoria: 'Hortifruti', aliases: ['abacate'] },
+  { tipo: 'Alho', categoria: 'Hortifruti', aliases: ['alho'] }
 ];
 
 const MARCAS = [
@@ -94,6 +113,7 @@ const MARCAS = [
   { marca: 'Itambé', aliases: ['itambe', 'itambé'] },
   { marca: 'Piracanjuba', aliases: ['piracanjuba'] },
   { marca: 'Italac', aliases: ['italac'] },
+  { marca: 'Batavo', aliases: ['batavo'] },
   { marca: 'Yoki', aliases: ['yoki'] },
   { marca: 'Qualitá', aliases: ['qualita', 'qualitá'] },
   { marca: 'Dona Benta', aliases: ['dona benta'] },
@@ -102,6 +122,29 @@ const MARCAS = [
   { marca: 'Sadia', aliases: ['sadia'] },
   { marca: 'Seara', aliases: ['seara'] },
   { marca: 'Perdigão', aliases: ['perdigao', 'perdigão'] },
+  { marca: 'Halls', aliases: ['halls'] },
+  { marca: 'Trident', aliases: ['trident'] },
+  { marca: 'Gatorade', aliases: ['gatorade'] },
+  { marca: 'Crystal', aliases: ['crystal'] },
+  { marca: 'Melitta', aliases: ['melitta'] },
+  { marca: 'Oreo', aliases: ['oreo'] },
+  { marca: 'Nutella', aliases: ['nutella'] },
+  { marca: 'Lacta', aliases: ['lacta'] },
+  { marca: 'Garoto', aliases: ['garoto'] },
+  { marca: 'Comfort', aliases: ['comfort'] },
+  { marca: 'Downy', aliases: ['downy'] },
+  { marca: 'Cif', aliases: ['cif'] },
+  { marca: 'Nivea', aliases: ['nivea', 'nívea'] },
+  { marca: 'Colgate', aliases: ['colgate'] },
+  { marca: 'Pantene', aliases: ['pantene'] },
+  { marca: 'Gillette', aliases: ['gillette'] },
+  { marca: 'Docile', aliases: ['docile'] },
+  { marca: 'Panini', aliases: ['panini'] },
+  { marca: 'Predilecta', aliases: ['predilecta'] },
+  { marca: 'Codil', aliases: ['codil', 'codisul'] },
+  { marca: 'Delta', aliases: ['delta'] },
+  { marca: 'Bem Brasil', aliases: ['bem brasil'] },
+  { marca: 'Brilhante', aliases: ['brilhante'] },
   { marca: 'Heineken', aliases: ['heineken'] },
   { marca: 'Skol', aliases: ['skol'] },
   { marca: 'Brahma', aliases: ['brahma'] },
@@ -179,8 +222,25 @@ function tipoDetectadoValido(texto, tipoInfo) {
   return tipoInfo;
 }
 
+function tipoPorNome(tipo) {
+  return TIPOS.find((entrada) => entrada.tipo === tipo) || null;
+}
+
+function detectarTipo(texto) {
+  if (/\b(sanit|sanitaria|sanitário|sanitaria|agua sanitaria)\b/.test(texto)) {
+    return tipoPorNome('Água sanitária');
+  }
+  if (/\bdesinf/.test(texto)) return tipoPorNome('Desinfetante');
+  if (/\balcool\b/.test(texto)) return tipoPorNome('Álcool');
+  if (/\b(cr\.?\s*dental|pasta dental|colgate)\b/.test(texto)) return tipoPorNome('Creme dental');
+  if (/\b(desod|desodorante)\b/.test(texto)) return tipoPorNome('Desodorante');
+  if (/\bcerv\b/.test(texto)) return tipoPorNome('Cerveja');
+
+  return tipoDetectadoValido(texto, detectarPrimeiro(texto, TIPOS));
+}
+
 function detectarCategoria(texto) {
-  const porTipo = tipoDetectadoValido(texto, detectarPrimeiro(texto, TIPOS));
+  const porTipo = detectarTipo(texto);
   if (porTipo) return porTipo.categoria;
   const porCategoria = detectarPrimeiro(texto, CATEGORIAS);
   return porCategoria ? porCategoria.categoria : null;
@@ -332,7 +392,7 @@ function analisarProduto(nomeBruto, sobrescritas = {}) {
   const comparavel = prepararTextoComparacao(nome);
   const tokens = tokenizar(comparavel);
   const marcaInfo = detectarPrimeiro(comparavel, MARCAS);
-  let tipoInfo = tipoDetectadoValido(comparavel, detectarPrimeiro(comparavel, TIPOS));
+  let tipoInfo = detectarTipo(comparavel);
 
   if (!tipoInfo && marcaInfo && ['Coca-Cola', 'Pepsi', 'Fanta', 'Sprite', 'Guaraná Antarctica'].includes(marcaInfo.marca)) {
     tipoInfo = TIPOS.find((entrada) => entrada.tipo === 'Refrigerante');

@@ -104,6 +104,31 @@ function check(cond, nome) {
     analiseBombom.quantidade === '15g',
     'bombom Arcor recebe categoria/tipo/marca/tamanho');
 
+  const analiseSanitaria = analisarProduto('AGUA CLASSIC SANIT 5L');
+  check(analiseSanitaria.categoria === 'Limpeza' &&
+    analiseSanitaria.tipo === 'Água sanitária' &&
+    analiseSanitaria.quantidade === '5L',
+    'água sanitária não entra como bebida');
+
+  const analiseCerveja = analisarProduto('BRAHMA CERV LATA 350ML');
+  check(analiseCerveja.categoria === 'Bebidas' &&
+    analiseCerveja.tipo === 'Cerveja' &&
+    analiseCerveja.marca === 'Brahma' &&
+    analiseCerveja.quantidade === '350ml',
+    'cerveja abreviada recebe categoria/tipo/marca/tamanho');
+
+  const analiseHalls = analisarProduto('DROPS HALLS MENTA 28G');
+  check(analiseHalls.categoria === 'Alimentos' &&
+    analiseHalls.tipo === 'Bala' &&
+    analiseHalls.marca === 'Halls',
+    'drops Halls entra como bala com marca');
+
+  const analiseDental = analisarProduto('ADVANC FRESH COLGATE CR DENTAL TOTAL 90G');
+  check(analiseDental.categoria === 'Higiene' &&
+    analiseDental.tipo === 'Creme dental' &&
+    analiseDental.marca === 'Colgate',
+    'creme dental Colgate entra como higiene');
+
   console.log('\n--- Busca tolerante ---');
   const busca = await buscarProdutos('arroz tio joao');
   check(busca.length >= 1 && busca.some((p) => p.nome.includes('Tio João')),

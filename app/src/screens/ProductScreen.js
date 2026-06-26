@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
@@ -69,6 +69,7 @@ export default function ProductScreen({ route, navigation }) {
   const { adicionar, contem } = useCart();
   const [produto, setProduto] = useState(null);
   const [carregando, setCarregando] = useState(true);
+  const [atualizando, setAtualizando] = useState(false);
   const [aba, setAba] = useState('locais');
   const naLista = contem(id);
   const estatisticaGeral = produto?.estatisticas?.geral || {};
@@ -77,16 +78,23 @@ export default function ProductScreen({ route, navigation }) {
   const precoUnidade = formatPrecoUnidade(produto?.preco_unidade);
   const frescorPreco = rotuloConfiancaPreco(produto?.confianca_preco || ultimoPrecoInfo?.confianca_preco);
 
+  async function carregarProduto(manual = false) {
+    if (manual) setAtualizando(true);
+    try {
+      setProduto(await api.get(`/produtos/${id}`, {
+        cacheMs: 30000,
+        forceRefresh: manual
+      }));
+    } catch (_e) {
+      setProduto(null);
+    } finally {
+      setCarregando(false);
+      if (manual) setAtualizando(false);
+    }
+  }
+
   useEffect(() => {
-    (async () => {
-      try {
-        setProduto(await api.get(`/produtos/${id}`));
-      } catch (_e) {
-        setProduto(null);
-      } finally {
-        setCarregando(false);
-      }
-    })();
+    carregarProduto();
   }, [id]);
 
   return (
@@ -104,7 +112,11 @@ export default function ProductScreen({ route, navigation }) {
       ) : !produto ? (
         <Text style={styles.vazio}>Não foi possível carregar este produto.</Text>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={atualizando} onRefresh={() => carregarProduto(true)} tintColor={colors.brand} />}
+        >
           <ProductImage uri={produto.imagem_url} style={styles.imagem} iconName="pricetag" iconSize={48} />
           <Text style={styles.nome}>{produto.nome}</Text>
           <View style={styles.metaLinha}>

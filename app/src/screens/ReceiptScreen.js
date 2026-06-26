@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
+import ProductImage from '../components/ProductImage';
 import { colors, fonts, radius } from '../theme';
 import { formatBRL } from '../utils/format';
 
@@ -77,7 +78,8 @@ export default function ReceiptScreen({ route, navigation }) {
 
             return (
               <View key={`${item.produto_id || index}-${index}`} style={styles.item}>
-                <View style={{ flex: 1 }}>
+                <ProductImage uri={item.imagem_url} style={styles.itemImagem} iconSize={18} />
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.itemNome} numberOfLines={2}>{nome}</Text>
                   {!!metaTexto(item) && <Text style={styles.itemMeta} numberOfLines={1}>{metaTexto(item)}</Text>}
                   {originalDiferente && (
@@ -110,7 +112,8 @@ const styles = StyleSheet.create({
   totalLabel: { fontFamily: fonts.body, fontSize: 11, color: '#9FD9BC' },
   totalValor: { fontFamily: fonts.monoMedium, fontSize: 28, color: colors.white, marginTop: 2 },
   secao: { fontFamily: fonts.display, fontSize: 16, color: colors.ink, marginTop: 22, marginBottom: 10 },
-  item: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 12, marginBottom: 8 },
+  item: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 12, marginBottom: 8 },
+  itemImagem: { width: 42, height: 42, borderRadius: radius.sm, backgroundColor: '#F1F0EA', alignItems: 'center', justifyContent: 'center' },
   itemNome: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },
   itemMeta: { fontFamily: fonts.body, fontSize: 11, color: colors.brandDark, marginTop: 2 },
   itemOriginal: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted, marginTop: 2 },

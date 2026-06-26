@@ -37,13 +37,14 @@ const cacheGet = new Map();
 const CACHE_MAX = 80;
 
 export function setAuthToken(token) {
+  if (token !== authToken) cacheGet.clear();
   authToken = token;
 }
 
-function obterCacheGet(chave) {
+function obterCacheGet(chave, aceitarExpirado = false) {
   const item = cacheGet.get(chave);
   if (!item) return null;
-  if (Date.now() > item.expiraEm) {
+  if (!aceitarExpirado && Date.now() > item.expiraEm) {
     cacheGet.delete(chave);
     return null;
   }
@@ -62,7 +63,8 @@ function salvarCacheGet(chave, valor, cacheMs) {
 async function request(metodo, caminho, corpo, opcoes = {}) {
   const cacheMs = metodo === 'GET' ? Number(opcoes.cacheMs || 0) : 0;
   const cacheKey = cacheMs ? `${authToken || 'public'}:${API_BASE}${caminho}` : null;
-  if (cacheKey) {
+  const forcarRede = Boolean(opcoes.forceRefresh || opcoes.skipCache);
+  if (cacheKey && !forcarRede) {
     const cached = obterCacheGet(cacheKey);
     if (cached) return cached;
   }
@@ -85,6 +87,11 @@ async function request(metodo, caminho, corpo, opcoes = {}) {
       signal: controller ? controller.signal : undefined,
     });
   } catch (e) {
+    if (cacheKey) {
+      const stale = obterCacheGet(cacheKey, true);
+      if (stale) return stale;
+    }
+
     const abortou = e && (e.name === 'AbortError' || controller?.signal?.aborted);
     const erro = new Error(abortou
       ? 'A API demorou demais para responder. Tente novamente em alguns segundos.'

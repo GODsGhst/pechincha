@@ -23,15 +23,21 @@ export default function HomeScreen({ navigation }) {
   const { usuario } = useAuth();
   const [itens, setItens] = useState([]);
   const [carregando, setCarregando] = useState(true);
+  const [atualizando, setAtualizando] = useState(false);
 
-  const carregar = useCallback(async () => {
+  const carregar = useCallback(async (manual = false) => {
+    if (manual) setAtualizando(true);
     try {
-      const { menores_precos } = await api.get('/produtos/menores?limite=6');
+      const { menores_precos } = await api.get('/produtos/menores?limite=6', {
+        cacheMs: 30000,
+        forceRefresh: manual
+      });
       setItens(menores_precos || []);
     } catch (_e) {
       setItens([]);
     } finally {
       setCarregando(false);
+      if (manual) setAtualizando(false);
     }
   }, []);
 
@@ -60,7 +66,7 @@ export default function HomeScreen({ navigation }) {
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={false} onRefresh={carregar} tintColor={colors.brand} />}
+        refreshControl={<RefreshControl refreshing={atualizando} onRefresh={() => carregar(true)} tintColor={colors.brand} />}
       >
         <View style={styles.comunidade}>
           <Ionicons name="people" size={20} color={colors.brand} />

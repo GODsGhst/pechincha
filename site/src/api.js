@@ -29,10 +29,10 @@ export function clearStoredSession() {
   localStorage.removeItem(USER_KEY);
 }
 
-function getCache(key) {
+function getCache(key, allowExpired = false) {
   const item = cacheGet.get(key);
   if (!item) return null;
-  if (Date.now() > item.expiraEm) {
+  if (!allowExpired && Date.now() > item.expiraEm) {
     cacheGet.delete(key);
     return null;
   }
@@ -51,7 +51,8 @@ function setCache(key, value, cacheMs) {
 async function request(method, path, body, options = {}) {
   const cacheMs = method === 'GET' ? Number(options.cacheMs || 0) : 0;
   const cacheKey = cacheMs ? `${authToken || 'public'}:${API_BASE}${path}` : null;
-  const cached = cacheKey ? getCache(cacheKey) : null;
+  const forceNetwork = Boolean(options.forceRefresh || options.skipCache);
+  const cached = cacheKey && !forceNetwork ? getCache(cacheKey) : null;
   if (cached) return cached;
 
   let response;
@@ -68,6 +69,11 @@ async function request(method, path, body, options = {}) {
       signal: controller.signal
     });
   } catch (error) {
+    if (cacheKey) {
+      const stale = getCache(cacheKey, true);
+      if (stale) return stale;
+    }
+
     const err = new Error(error?.name === 'AbortError'
       ? 'A API demorou demais para responder.'
       : `Falha de conexão com a API em ${API_BASE}`);
