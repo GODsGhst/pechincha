@@ -26,16 +26,32 @@ no celular. O `eas.json` (perfis development/preview/production) já está pront
 
 ---
 
-## Caminho B — Android Studio (local)
+## Caminho B — Android Studio / Gradle local
 
 1. Libere ~10 GB de disco.
 2. Abra o **Android Studio** → *Open* → selecione a pasta `app/android`.
 3. Deixe ele sincronizar (baixa o SDK que faltar e usa o JDK próprio).
-4. Menu **Build → Build App Bundle(s) / APK(s) → Build APK(s)**.
-5. O APK sai em `app/android/app/build/outputs/apk/debug/app-debug.apk`.
+4. Para teste rápido, use **Build → Build App Bundle(s) / APK(s) → Build APK(s)**.
+5. Para gerar o APK release pelo terminal:
+
+```bash
+cd app/android
+./gradlew assembleRelease
+```
+
+O APK release sai em `app/android/app/build/outputs/apk/release/app-release.apk`.
+Neste projeto também mantemos uma cópia prática em `app/Pechincha-release.apk`.
 
 > Se a pasta `android/` foi apagada pra liberar espaço, recrie com:
 > `cd app && npx expo prebuild -p android`
+
+### Assinatura do release
+
+O release local atual usa a assinatura debug gerada pelo projeto. Isso é aceitável
+para instalar e testar agora, mas **não é seguro para publicar ou distribuir**
+como versão final. Antes de mandar para usuários, gere uma keystore release
+privada e configure o Gradle para assinar com ela. Guarde essa keystore: sem a
+mesma chave, o Android não aceita atualizar o app instalado.
 
 ---
 
