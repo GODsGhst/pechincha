@@ -3,6 +3,7 @@ import { View, Text, TextInput, FlatList, Pressable, StyleSheet, ActivityIndicat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
+import ProductImage from '../components/ProductImage';
 import { colors, fonts, radius } from '../theme';
 import { formatBRL } from '../utils/format';
 
@@ -207,7 +208,7 @@ export default function SearchScreen({ route, navigation }) {
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
             <Pressable style={styles.linha} onPress={() => navigation.navigate('Product', { id: item.id, nome: item.nome })}>
-              <View style={styles.linhaImg}><Ionicons name="pricetag-outline" size={20} color={colors.inkMuted} /></View>
+              <ProductImage uri={item.imagem_url} style={styles.linhaImg} iconSize={20} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.linhaNome} numberOfLines={2}>{item.nome}</Text>
                 {!!metaTexto(item) && <Text style={styles.linhaMeta} numberOfLines={1}>{metaTexto(item)}</Text>}

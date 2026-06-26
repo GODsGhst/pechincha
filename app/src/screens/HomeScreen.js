@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
+import ProductImage from '../components/ProductImage';
 import { useAuth } from '../context/AuthContext';
 import { colors, fonts, radius } from '../theme';
 import { formatBRL } from '../utils/format';
@@ -98,7 +99,7 @@ export default function HomeScreen({ navigation }) {
                 style={styles.card}
                 onPress={() => navigation.navigate('Product', { id: it.produto_id, nome: it.produto })}
               >
-                <View style={styles.cardImg}><Ionicons name="pricetag-outline" size={26} color={colors.inkMuted} /></View>
+                <ProductImage uri={it.imagem_url} style={styles.cardImg} iconSize={26} />
                 <Text style={styles.cardNome} numberOfLines={2}>{it.produto}</Text>
                 <Text style={styles.cardLabel}>menor preço</Text>
                 <Text style={styles.cardPreco}>{formatBRL(it.valor)}</Text>
@@ -130,7 +131,7 @@ const styles = StyleSheet.create({
   card: { width: '47%', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 10 },
   cardImg: { height: 78, borderRadius: radius.md, backgroundColor: '#F1F0EA', alignItems: 'center', justifyContent: 'center' },
   cardNome: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink, marginTop: 8, minHeight: 34 },
-  cardLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 4 },
+  cardLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, textTransform: 'uppercase', marginTop: 4 },
   cardPreco: { fontFamily: fonts.monoMedium, fontSize: 16, color: colors.brand, marginTop: 2 },
   cardLocal: { fontFamily: fonts.body, fontSize: 11, color: colors.inkSoft, marginTop: 2 },
   vazio: { alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 24, marginTop: 8, gap: 8 },

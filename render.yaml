@@ -14,6 +14,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Aumente para 2+ em plano com memoria suficiente para ativar workers em paralelo.
+      - key: WEB_CONCURRENCY
+        value: "1"
       - key: JWT_SECRET
         generateValue: true # o Render gera um segredo aleatório
       - key: JWT_EXPIRES_IN

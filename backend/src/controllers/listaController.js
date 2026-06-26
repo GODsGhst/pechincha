@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const ListaCompra = require('../models/ListaCompra');
 const Produto = require('../models/Produto');
+const productImageService = require('../services/productImageService');
 
 function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -21,13 +22,14 @@ function quantidadeValida(valor) {
 function populateLista(queryOuDoc) {
   return queryOuDoc.populate({
     path: 'itens.produto_id',
-    select: 'nome categoria tipo marca quantidade menor_preco ultimo_preco'
+    select: 'nome categoria tipo marca quantidade imagem_url imagem_credito menor_preco ultimo_preco'
   });
 }
 
 function formatarItem(item) {
   const produto = item.produto_id;
   if (!produto) return null;
+  const imagem = productImageService.imagemDoProduto(produto);
 
   return {
     id: String(produto._id),
@@ -37,6 +39,8 @@ function formatarItem(item) {
     tipo: produto.tipo || null,
     marca: produto.marca || null,
     quantidade_produto: produto.quantidade || null,
+    imagem_url: imagem.url,
+    imagem_credito: imagem.credito,
     menor_preco: produto.menor_preco,
     ultimo_preco: produto.ultimo_preco && produto.ultimo_preco.valor !== undefined && produto.ultimo_preco.valor !== null
       ? {

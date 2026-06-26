@@ -141,7 +141,9 @@ function SelectFilter({ label, value, options, onChange }) {
 function ProductRow({ product, inList, onAdd }) {
   return (
     <article className="product-row">
-      <div className="product-icon"><ShoppingCart size={18} /></div>
+      <div className="product-icon">
+        {product.imagem_url ? <img src={product.imagem_url} alt="" loading="lazy" /> : <ShoppingCart size={18} />}
+      </div>
       <div className="product-main">
         <h3>{product.nome}</h3>
         {productMeta(product) && <p>{productMeta(product)}</p>}
@@ -165,6 +167,9 @@ function ListItem({ item, onToggle, onQuantity, onRemove }) {
       <button className={item.selecionado ? 'check-button selected' : 'check-button'} onClick={() => onToggle(item)} type="button">
         {item.selecionado && <Check size={15} />}
       </button>
+      <div className="product-icon compact">
+        {item.imagem_url ? <img src={item.imagem_url} alt="" loading="lazy" /> : <ShoppingCart size={16} />}
+      </div>
       <div className="list-main">
         <h3>{item.nome}</h3>
         {productMeta(item) && <p>{productMeta(item)}</p>}

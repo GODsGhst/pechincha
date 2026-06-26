@@ -8,8 +8,8 @@ const Fuse = require('fuse.js');
 const Produto = require('../models/Produto');
 
 const LIMIAR_DEDUP = 0.22;
-const LIMIAR_BUSCA = 0.4;
-const CAMPOS_PRODUTO_DEDUP = 'nome nome_normalizado chave_dedup marca categoria tipo quantidade quantidade_normalizada menor_preco ultimo_preco criado_em';
+const LIMIAR_BUSCA = 0.48;
+const CAMPOS_PRODUTO_DEDUP = 'nome nome_normalizado chave_dedup marca categoria tipo quantidade quantidade_normalizada imagem_url imagem_credito menor_preco ultimo_preco criado_em';
 const MAX_PRODUTOS_FUZZY = 750;
 
 const STOPWORDS = new Set([
@@ -33,7 +33,7 @@ const CATEGORIAS = [
 ];
 
 const TIPOS = [
-  { tipo: 'Refrigerante', categoria: 'Bebidas', aliases: ['refrigerante', 'refri', 'coca cola', 'cocacola', 'guarana', 'guaraná', 'fanta', 'sprite', 'pepsi'] },
+  { tipo: 'Refrigerante', categoria: 'Bebidas', aliases: ['refrigerante', 'refri', 'coca cola', 'cocacola', 'cola', 'guarana', 'guaraná', 'fanta', 'sprite', 'pepsi'] },
   { tipo: 'Água', categoria: 'Bebidas', aliases: ['agua', 'água', 'mineral'] },
   { tipo: 'Suco', categoria: 'Bebidas', aliases: ['suco', 'nectar', 'néctar'] },
   { tipo: 'Cerveja', categoria: 'Bebidas', aliases: ['cerveja', 'long neck', 'latinha'] },
@@ -78,7 +78,7 @@ const TIPOS = [
 ];
 
 const MARCAS = [
-  { marca: 'Coca-Cola', aliases: ['coca cola', 'cocacola', 'coca'] },
+  { marca: 'Coca-Cola', aliases: ['coca cola', 'cocacola', 'coca', 'cola', 'coke'] },
   { marca: 'Ypê', aliases: ['ype', 'ypê'] },
   { marca: 'Ama', aliases: ['ama'] },
   { marca: 'Omo', aliases: ['omo'] },
@@ -370,6 +370,64 @@ function intersecaoTokens(a, b) {
   return iguais / Math.min(setA.size, setB.size);
 }
 
+function tokensRelevantes(tokens = []) {
+  return [...new Set(tokens)]
+    .filter((token) => token.length >= 2)
+    .filter((token) => !TOKENS_GENERICOS.has(token));
+}
+
+function tokenCombina(busca, candidato) {
+  if (!busca || !candidato) return false;
+  if (busca === candidato) return true;
+  if (busca.length >= 3 && candidato.startsWith(busca)) return true;
+  if (candidato.length >= 4 && busca.startsWith(candidato)) return true;
+  return false;
+}
+
+function pontuarTokensBusca(tokensBusca, tokensProduto) {
+  if (tokensBusca.length === 0) return 0;
+  const tokensCandidatos = tokensRelevantes(tokensProduto);
+  if (tokensCandidatos.length === 0) return 0;
+
+  let combinados = 0;
+  for (const tokenBusca of tokensBusca) {
+    if (tokensCandidatos.some((tokenProduto) => tokenCombina(tokenBusca, tokenProduto))) {
+      combinados += 1;
+    }
+  }
+  return combinados / tokensBusca.length;
+}
+
+function textoBuscaProduto(produto, analise) {
+  const partes = [
+    produto.nome,
+    produto.nome_normalizado,
+    produto.chave_dedup,
+    analise.chave,
+    analise.normalizado,
+    analise.comparavel,
+    produto.marca,
+    produto.tipo,
+    produto.categoria,
+    produto.quantidade,
+    produto.quantidade_normalizada
+  ].filter(Boolean);
+
+  return tokenizar(partes.join(' ')).join(' ');
+}
+
+function mesclarProdutosPorId(...listas) {
+  const porId = new Map();
+  for (const lista of listas) {
+    for (const produto of lista || []) {
+      if (produto && produto._id && !porId.has(String(produto._id))) {
+        porId.set(String(produto._id), produto);
+      }
+    }
+  }
+  return [...porId.values()];
+}
+
 function chaveDedupDaAnalise(analise) {
   return analise && analise.confiavel ? analise.chave : null;
 }
@@ -555,48 +613,118 @@ async function buscarProdutos(descricao, filtros = {}) {
   const analiseBusca = analisarProduto(descricao);
   if (!analiseBusca.normalizado) return [];
 
-  const query = montarQueryCandidatos(analiseBusca, {
+  const quantidadeNormalizada = filtros.quantidade
+    ? normalizarQuantidades(extrairQuantidades(prepararTextoComparacao(filtros.quantidade)))
+    : undefined;
+
+  const queryEscopo = montarQueryCandidatos(analiseBusca, {
     categoria: filtros.categoria,
     tipo: filtros.tipo,
     marca: filtros.marca,
-    quantidade_normalizada: filtros.quantidade
-      ? normalizarQuantidades(extrairQuantidades(prepararTextoComparacao(filtros.quantidade)))
-      : undefined
+    quantidade_normalizada: quantidadeNormalizada
   });
+  const queryFiltros = {};
 
-  if (filtros.categoria) query.categoria = new RegExp(`^${escapeRegex(filtros.categoria)}$`, 'i');
-  if (filtros.tipo) query.tipo = new RegExp(`^${escapeRegex(filtros.tipo)}$`, 'i');
-  if (filtros.marca) query.marca = new RegExp(`^${escapeRegex(filtros.marca)}$`, 'i');
-  if (filtros.quantidade) query.quantidade = new RegExp(`^${escapeRegex(filtros.quantidade)}$`, 'i');
+  if (filtros.categoria) {
+    queryEscopo.categoria = new RegExp(`^${escapeRegex(filtros.categoria)}$`, 'i');
+    queryFiltros.categoria = queryEscopo.categoria;
+  }
+  if (filtros.tipo) {
+    queryEscopo.tipo = new RegExp(`^${escapeRegex(filtros.tipo)}$`, 'i');
+    queryFiltros.tipo = queryEscopo.tipo;
+  }
+  if (filtros.marca) {
+    queryEscopo.marca = new RegExp(`^${escapeRegex(filtros.marca)}$`, 'i');
+    queryFiltros.marca = queryEscopo.marca;
+  }
+  if (filtros.quantidade) {
+    delete queryEscopo.quantidade_normalizada;
+    queryEscopo.quantidade = new RegExp(`^${escapeRegex(filtros.quantidade)}$`, 'i');
+    queryFiltros.quantidade = queryEscopo.quantidade;
+  }
 
   const chaveBusca = chaveDedupDaAnalise(analiseBusca);
   if (chaveBusca) {
-    const exatos = await Produto.find({ ...query, chave_dedup: chaveBusca }).limit(20);
+    const exatos = await Produto.find({ ...queryFiltros, chave_dedup: chaveBusca }).limit(20);
     if (exatos.length > 0) return exatos;
   }
 
-  const produtos = await Produto.find(query).limit(MAX_PRODUTOS_FUZZY);
+  const consultas = new Map();
+  const adicionarConsulta = (query) => {
+    const assinatura = Object.entries(query)
+      .map(([chave, valor]) => `${chave}:${String(valor)}`)
+      .sort()
+      .join('|');
+    consultas.set(assinatura, query);
+  };
+
+  adicionarConsulta(queryEscopo);
+  adicionarConsulta(queryFiltros);
+
+  const listas = await Promise.all(
+    [...consultas.values()].map((query) => Produto.find(query).limit(MAX_PRODUTOS_FUZZY))
+  );
+  const produtos = mesclarProdutosPorId(...listas);
   if (produtos.length === 0) return [];
 
   const entradas = produtos.map((p) => {
     const analise = analiseDoProdutoSalvo(p);
+    const texto = textoBuscaProduto(p, analise);
     return {
       ref: p,
-      texto: [analise.chave, analise.normalizado, p.marca, p.tipo, p.categoria, p.quantidade].filter(Boolean).join(' ')
+      analise,
+      texto,
+      tokens: tokenizar(texto)
     };
   });
 
-  const tokens = tokenizar(analiseBusca.comparavel);
-  const usarEstendida = tokens.length > 0;
+  const tokensBusca = tokensRelevantes([
+    ...analiseBusca.tokens,
+    ...tokenizar(analiseBusca.normalizado)
+  ]);
   const fuse = new Fuse(entradas, {
     keys: ['texto'],
     threshold: LIMIAR_BUSCA,
     ignoreLocation: true,
-    useExtendedSearch: usarEstendida
+    includeScore: true,
+    minMatchCharLength: 2
   });
 
-  const queryFuse = usarEstendida ? tokens.map((t) => `'${t}`).join(' ') : analiseBusca.normalizado;
-  return fuse.search(queryFuse).map((r) => r.item.ref);
+  const resultadosFuse = new Map(
+    fuse.search(analiseBusca.comparavel || analiseBusca.normalizado)
+      .map((resultado) => [String(resultado.item.ref._id), resultado.score ?? 0])
+  );
+
+  return entradas
+    .map((entrada) => {
+      const id = String(entrada.ref._id);
+      const scoreFuse = resultadosFuse.has(id) ? resultadosFuse.get(id) : 1;
+      const scoreTokens = pontuarTokensBusca(tokensBusca, entrada.tokens);
+      const chaveIgual = chaveBusca && entrada.ref.chave_dedup === chaveBusca;
+      const aceitoPorMetadado = Boolean(
+        (analiseBusca.tipo && entrada.analise.tipo === analiseBusca.tipo) ||
+        (analiseBusca.marca && entrada.analise.marca === analiseBusca.marca) ||
+        (analiseBusca.quantidade_normalizada &&
+          entrada.analise.quantidade_normalizada === analiseBusca.quantidade_normalizada)
+      );
+      const aceitoPorFuse = resultadosFuse.has(id) &&
+        (tokensBusca.length <= 1 ? scoreFuse <= 0.25 : scoreFuse <= LIMIAR_BUSCA);
+      const bonusEscopo =
+        (analiseBusca.marca && entrada.analise.marca === analiseBusca.marca ? 0.08 : 0) +
+        (analiseBusca.tipo && entrada.analise.tipo === analiseBusca.tipo ? 0.06 : 0) +
+        (analiseBusca.quantidade_normalizada &&
+          entrada.analise.quantidade_normalizada === analiseBusca.quantidade_normalizada ? 0.08 : 0);
+
+      return {
+        ref: entrada.ref,
+        score: scoreFuse - (scoreTokens * 0.35) - bonusEscopo - (chaveIgual ? 0.4 : 0),
+        aceito: chaveIgual || aceitoPorMetadado || aceitoPorFuse || scoreTokens >= (tokensBusca.length <= 1 ? 0.5 : 0.45)
+      };
+    })
+    .filter((resultado) => resultado.aceito)
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 50)
+    .map((resultado) => resultado.ref);
 }
 
 module.exports = {

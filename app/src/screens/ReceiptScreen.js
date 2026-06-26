@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   local: { fontFamily: fonts.display, fontSize: 16, color: colors.ink },
   data: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft, marginTop: 3 },
   totalBox: { backgroundColor: colors.brandDark, borderRadius: radius.lg, padding: 16, marginTop: 12 },
-  totalLabel: { fontFamily: fonts.body, fontSize: 11, color: '#9FD9BC', textTransform: 'uppercase', letterSpacing: 0.5 },
+  totalLabel: { fontFamily: fonts.body, fontSize: 11, color: '#9FD9BC', textTransform: 'uppercase' },
   totalValor: { fontFamily: fonts.monoMedium, fontSize: 28, color: colors.white, marginTop: 2 },
   secao: { fontFamily: fonts.display, fontSize: 16, color: colors.ink, marginTop: 22, marginBottom: 10 },
   item: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 12, marginBottom: 8 },

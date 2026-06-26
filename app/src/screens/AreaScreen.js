@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   headerTitulo: { fontFamily: fonts.semibold, fontSize: 16, color: colors.brandDark },
   tituloLinha: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   titulo: { fontFamily: fonts.display, fontSize: 22, color: colors.brandDark },
-  cardLabel: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted, textTransform: 'uppercase', letterSpacing: 0.4 },
+  cardLabel: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted, textTransform: 'uppercase' },
   cardLocal: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 14, marginTop: 12 },
   cardLocalNome: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink, marginTop: 4 },
   cardLocalCep: { fontFamily: fonts.body, fontSize: 13, color: colors.inkMuted, marginTop: 2 },

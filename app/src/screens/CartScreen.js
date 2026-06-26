@@ -3,6 +3,7 @@ import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
+import ProductImage from '../components/ProductImage';
 import { useCart } from '../context/CartContext';
 import { colors, fonts, radius } from '../theme';
 import { formatBRL } from '../utils/format';
@@ -173,7 +174,7 @@ export default function CartScreen({ navigation }) {
                 color={item.selecionado ? colors.brand : colors.inkMuted}
               />
             </Pressable>
-            <View style={styles.cardImg}><Ionicons name="pricetag-outline" size={20} color={colors.inkMuted} /></View>
+            <ProductImage uri={item.imagem_url} style={styles.cardImg} iconSize={20} />
             <View style={{ flex: 1 }}>
               <Text style={styles.cardNome} numberOfLines={2}>{item.nome}</Text>
               {!!metaTexto(item) && <Text style={styles.cardMeta} numberOfLines={1}>{metaTexto(item)}</Text>}
@@ -288,7 +289,7 @@ const styles = StyleSheet.create({
   vazioBotao: { backgroundColor: colors.brand, borderRadius: radius.md, paddingHorizontal: 20, height: 46, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
   vazioBotaoTexto: { fontFamily: fonts.semibold, fontSize: 14, color: colors.white },
   rodape: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.line, paddingHorizontal: 16, paddingTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  rodapeLabel: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted, textTransform: 'uppercase', letterSpacing: 0.4 },
+  rodapeLabel: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted, textTransform: 'uppercase' },
   rodapeTotal: { fontFamily: fonts.monoMedium, fontSize: 22, color: colors.brandDark, marginTop: 2 },
   rodapeBotao: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brand, borderRadius: radius.md, paddingHorizontal: 18, height: 48 },
   rodapeBotaoTexto: { fontFamily: fonts.semibold, fontSize: 14, color: colors.white },

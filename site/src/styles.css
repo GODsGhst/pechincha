@@ -359,6 +359,18 @@ select:focus {
   border-radius: 8px;
   background: #f1efe6;
   color: #697067;
+  overflow: hidden;
+}
+
+.product-icon.compact {
+  width: 38px;
+  height: 38px;
+}
+
+.product-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .product-main,
@@ -426,7 +438,7 @@ select:focus {
 
 .list-item {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 86px 34px;
+  grid-template-columns: 28px 38px minmax(0, 1fr) 86px 34px;
   gap: 10px;
   align-items: center;
   padding: 10px;
@@ -572,11 +584,11 @@ select:focus {
   }
 
   .list-item {
-    grid-template-columns: 28px minmax(0, 1fr) 34px;
+    grid-template-columns: 28px 38px minmax(0, 1fr) 34px;
   }
 
   .qty-control {
-    grid-column: 2 / 3;
+    grid-column: 3 / 4;
     width: 86px;
   }
 }

@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Produto = require('../models/Produto');
 const HistoricoPreco = require('../models/HistoricoPreco');
 const productNormalizer = require('../services/productNormalizer');
+const productImageService = require('../services/productImageService');
 
 function escapeRegex(texto) {
   return texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -33,7 +34,13 @@ function montarQueryProduto(filtros = {}) {
   return query;
 }
 
+function arredondar(valor) {
+  if (valor === null || valor === undefined || Number.isNaN(Number(valor))) return null;
+  return Number(Number(valor).toFixed(2));
+}
+
 function formatarProduto(p) {
+  const imagem = productImageService.imagemDoProduto(p);
   return {
     id: p._id,
     nome: p.nome,
@@ -41,6 +48,8 @@ function formatarProduto(p) {
     tipo: p.tipo || null,
     marca: p.marca || null,
     quantidade: p.quantidade || null,
+    imagem_url: imagem.url,
+    imagem_credito: imagem.credito,
     menor_preco: p.menor_preco,
     ultimo_preco: p.ultimo_preco && p.ultimo_preco.valor !== undefined && p.ultimo_preco.valor !== null
       ? {
@@ -81,6 +90,85 @@ function compactarHistoricoPreco(historico) {
   }
 
   return [...porLocalEValor.values()].sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0));
+}
+
+function formatarAgregadoPreco(r) {
+  if (!r) {
+    return {
+      media_preco: null,
+      menor_preco: null,
+      maior_preco: null,
+      registros: 0,
+      observacoes: 0
+    };
+  }
+
+  return {
+    media_preco: r.observacoes > 0 ? arredondar(r.soma_valor / r.observacoes) : null,
+    menor_preco: arredondar(r.menor_preco),
+    maior_preco: arredondar(r.maior_preco),
+    registros: r.registros || 0,
+    observacoes: r.observacoes || 0
+  };
+}
+
+async function estatisticasPreco(produtoId) {
+  const pesoObservacoes = { $max: [{ $ifNull: ['$observacoes', 1] }, 1] };
+  const valorPonderado = { $multiply: ['$valor', pesoObservacoes] };
+
+  const [geral, porEstabelecimento] = await Promise.all([
+    HistoricoPreco.aggregate([
+      { $match: { produto_id: produtoId } },
+      {
+        $group: {
+          _id: null,
+          soma_valor: { $sum: valorPonderado },
+          observacoes: { $sum: pesoObservacoes },
+          registros: { $sum: 1 },
+          menor_preco: { $min: '$valor' },
+          maior_preco: { $max: '$valor' }
+        }
+      }
+    ]),
+    HistoricoPreco.aggregate([
+      { $match: { produto_id: produtoId } },
+      { $sort: { data: -1 } },
+      {
+        $group: {
+          _id: '$estabelecimento_id',
+          soma_valor: { $sum: valorPonderado },
+          observacoes: { $sum: pesoObservacoes },
+          registros: { $sum: 1 },
+          menor_preco: { $min: '$valor' },
+          maior_preco: { $max: '$valor' },
+          ultimo_preco: { $first: '$valor' },
+          ultima_data: { $first: '$data' }
+        }
+      },
+      {
+        $lookup: {
+          from: 'estabelecimentos',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'estabelecimento'
+        }
+      },
+      { $unwind: { path: '$estabelecimento', preserveNullAndEmptyArrays: true } },
+      { $sort: { menor_preco: 1, ultima_data: -1 } },
+      { $limit: 20 }
+    ])
+  ]);
+
+  return {
+    geral: formatarAgregadoPreco(geral[0]),
+    por_estabelecimento: porEstabelecimento.map((r) => ({
+      estabelecimento_id: r._id || null,
+      estabelecimento: r.estabelecimento ? r.estabelecimento.nome : null,
+      ...formatarAgregadoPreco(r),
+      ultimo_preco: arredondar(r.ultimo_preco),
+      ultima_data: r.ultima_data || null
+    }))
+  };
 }
 
 // GET /api/produtos?nome=arroz&categoria=Alimentos&tipo=Arroz&marca=Tio%20João&quantidade=5kg
@@ -167,22 +255,27 @@ async function menores(req, res, next) {
     const resultados = await HistoricoPreco.aggregate(pipeline);
 
     return res.json({
-      menores_precos: resultados.map((r) => ({
-        produto_id: r._id,
-        produto: r.produto.nome,
-        categoria: r.produto.categoria || null,
-        tipo: r.produto.tipo || null,
-        marca: r.produto.marca || null,
-        quantidade: r.produto.quantidade || null,
-        valor: r.valor,
-        data: r.data,
-        estabelecimento_id: r.estabelecimento ? r.estabelecimento._id : null,
-        estabelecimento: r.estabelecimento ? r.estabelecimento.nome : null,
-        localizacao: r.estabelecimento && r.estabelecimento.localizacao &&
-          r.estabelecimento.localizacao.lat !== undefined && r.estabelecimento.localizacao.lat !== null
-          ? { lat: r.estabelecimento.localizacao.lat, lng: r.estabelecimento.localizacao.lng }
-          : null
-      }))
+      menores_precos: resultados.map((r) => {
+        const imagem = productImageService.imagemDoProduto(r.produto);
+        return {
+          produto_id: r._id,
+          produto: r.produto.nome,
+          categoria: r.produto.categoria || null,
+          tipo: r.produto.tipo || null,
+          marca: r.produto.marca || null,
+          quantidade: r.produto.quantidade || null,
+          imagem_url: imagem.url,
+          imagem_credito: imagem.credito,
+          valor: r.valor,
+          data: r.data,
+          estabelecimento_id: r.estabelecimento ? r.estabelecimento._id : null,
+          estabelecimento: r.estabelecimento ? r.estabelecimento.nome : null,
+          localizacao: r.estabelecimento && r.estabelecimento.localizacao &&
+            r.estabelecimento.localizacao.lat !== undefined && r.estabelecimento.localizacao.lat !== null
+            ? { lat: r.estabelecimento.localizacao.lat, lng: r.estabelecimento.localizacao.lng }
+            : null
+        };
+      })
     });
   } catch (err) {
     return next(err);
@@ -230,14 +323,7 @@ async function sugestoes(req, res, next) {
     }
 
     return res.json({
-      sugestoes: produtos.slice(0, limite).map((p) => ({
-        id: p._id,
-        nome: p.nome,
-        categoria: p.categoria || null,
-        tipo: p.tipo || null,
-        marca: p.marca || null,
-        quantidade: p.quantidade || null
-      }))
+      sugestoes: produtos.slice(0, limite).map(formatarProduto)
     });
   } catch (err) {
     return next(err);
@@ -256,9 +342,13 @@ async function detalhar(req, res, next) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
 
-    const historico = await HistoricoPreco.find({ produto_id: produto._id })
-      .sort({ data: -1 })
-      .populate('estabelecimento_id', 'nome');
+    const [historico, estatisticas] = await Promise.all([
+      HistoricoPreco.find({ produto_id: produto._id })
+        .sort({ data: -1 })
+        .populate('estabelecimento_id', 'nome'),
+      estatisticasPreco(produto._id)
+    ]);
+    const imagem = productImageService.imagemDoProduto(produto);
 
     return res.json({
       id: produto._id,
@@ -267,8 +357,11 @@ async function detalhar(req, res, next) {
       tipo: produto.tipo || null,
       marca: produto.marca || null,
       quantidade: produto.quantidade || null,
+      imagem_url: imagem.url,
+      imagem_credito: imagem.credito,
       menor_preco: produto.menor_preco,
       ultimo_preco: produto.ultimo_preco ? produto.ultimo_preco.valor : null,
+      estatisticas,
       historico: compactarHistoricoPreco(historico)
     });
   } catch (err) {
@@ -279,7 +372,7 @@ async function detalhar(req, res, next) {
 // POST /api/produtos
 async function criar(req, res, next) {
   try {
-    const { nome, categoria, tipo, marca } = req.body || {};
+    const { nome, categoria, tipo, marca, imagem_url, imagem_credito } = req.body || {};
     if (!nome || !nome.trim()) {
       return res.status(400).json({ error: 'Campo obrigatório: nome' });
     }
@@ -294,7 +387,9 @@ async function criar(req, res, next) {
       tipo: analise.tipo,
       marca: analise.marca,
       quantidade: analise.quantidade,
-      quantidade_normalizada: analise.quantidade_normalizada
+      quantidade_normalizada: analise.quantidade_normalizada,
+      imagem_url: imagem_url || null,
+      imagem_credito: imagem_credito || null
     });
     return res.status(201).json(formatarProduto(produto));
   } catch (err) {
@@ -309,7 +404,7 @@ async function atualizar(req, res, next) {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    const { nome, categoria, tipo, marca } = req.body || {};
+    const { nome, categoria, tipo, marca, imagem_url, imagem_credito } = req.body || {};
     const atualizacao = {};
     if (nome !== undefined) {
       if (!nome || !nome.trim()) {
@@ -329,6 +424,8 @@ async function atualizar(req, res, next) {
     if (categoria !== undefined) atualizacao.categoria = categoria;
     if (tipo !== undefined) atualizacao.tipo = tipo;
     if (marca !== undefined) atualizacao.marca = marca;
+    if (imagem_url !== undefined) atualizacao.imagem_url = imagem_url || null;
+    if (imagem_credito !== undefined) atualizacao.imagem_credito = imagem_credito || null;
 
     const produto = await Produto.findByIdAndUpdate(req.params.id, atualizacao, { new: true });
     if (!produto) {

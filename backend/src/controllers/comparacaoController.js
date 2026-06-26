@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Compra = require('../models/Compra');
 const HistoricoPreco = require('../models/HistoricoPreco');
 const Produto = require('../models/Produto');
+const productImageService = require('../services/productImageService');
 
 function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -61,7 +62,10 @@ async function menoresDoUsuario(req, res, next) {
       return res.json({ menores_precos: [] });
     }
 
-    const registros = await ultimosPrecosPorEstabelecimento(produtoIds);
+    const [registros, produtos] = await Promise.all([
+      ultimosPrecosPorEstabelecimento(produtoIds),
+      Produto.find({ _id: { $in: produtoIds } }, 'nome categoria tipo marca quantidade imagem_url imagem_credito')
+    ]);
 
     // Menor preço atual de cada produto entre os estabelecimentos
     const menorPorProduto = new Map();
@@ -73,20 +77,29 @@ async function menoresDoUsuario(req, res, next) {
       }
     }
 
-    const produtos = await Produto.find({ _id: { $in: produtoIds } }, 'nome');
-    const nomePorId = new Map(produtos.map((p) => [String(p._id), p.nome]));
+    const produtoPorId = new Map(produtos.map((p) => [String(p._id), p]));
 
     const resultado = [...menorPorProduto.values()]
       .sort((a, b) => a.valor - b.valor)
-      .map((r) => ({
-        produto_id: r._id.produto,
-        produto: nomePorId.get(String(r._id.produto)) || null,
-        valor: r.valor,
-        data: r.data,
-        estabelecimento_id: r.estabelecimento._id,
-        estabelecimento: r.estabelecimento.nome,
-        localizacao: localizacaoDoEstabelecimento(r.estabelecimento)
-      }));
+      .map((r) => {
+        const produto = produtoPorId.get(String(r._id.produto));
+        const imagem = productImageService.imagemDoProduto(produto);
+        return {
+          produto_id: r._id.produto,
+          produto: produto ? produto.nome : null,
+          categoria: produto ? produto.categoria || null : null,
+          tipo: produto ? produto.tipo || null : null,
+          marca: produto ? produto.marca || null : null,
+          quantidade: produto ? produto.quantidade || null : null,
+          imagem_url: imagem.url,
+          imagem_credito: imagem.credito,
+          valor: r.valor,
+          data: r.data,
+          estabelecimento_id: r.estabelecimento._id,
+          estabelecimento: r.estabelecimento.nome,
+          localizacao: localizacaoDoEstabelecimento(r.estabelecimento)
+        };
+      });
 
     return res.json({ menores_precos: resultado });
   } catch (err) {
@@ -263,22 +276,31 @@ async function compararCesta(req, res, next) {
     }
 
     const produtoIds = [...quantidadePorProduto.keys()].map((id) => new mongoose.Types.ObjectId(id));
-    const produtos = await Produto.find({ _id: { $in: produtoIds } }, 'nome');
+    const [produtos, registros] = await Promise.all([
+      Produto.find({ _id: { $in: produtoIds } }, 'nome categoria tipo marca quantidade imagem_url imagem_credito'),
+      ultimosPrecosPorEstabelecimento(produtoIds)
+    ]);
     if (produtos.length !== produtoIds.length) {
       return res.status(404).json({ error: 'Um ou mais produtos não foram encontrados' });
     }
 
-    const nomePorId = new Map(produtos.map((p) => [String(p._id), p.nome]));
+    const produtoPorId = new Map(produtos.map((p) => [String(p._id), p]));
     const itens = produtoIds.map((id) => {
       const chave = String(id);
+      const produto = produtoPorId.get(chave);
+      const imagem = productImageService.imagemDoProduto(produto);
       return {
         produto_id: id,
-        produto: nomePorId.get(chave),
+        produto: produto.nome,
+        categoria: produto.categoria || null,
+        tipo: produto.tipo || null,
+        marca: produto.marca || null,
+        quantidade_produto: produto.quantidade || null,
+        imagem_url: imagem.url,
+        imagem_credito: imagem.credito,
         quantidade: quantidadePorProduto.get(chave)
       };
     });
-
-    const registros = await ultimosPrecosPorEstabelecimento(produtoIds);
 
     const menorPorProduto = new Map();
     for (const r of registros) {

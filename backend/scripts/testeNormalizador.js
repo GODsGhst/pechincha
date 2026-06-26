@@ -85,6 +85,18 @@ function check(cond, nome) {
   check(buscaQuantidade.length === 1 && String(buscaQuantidade[0]._id) === String(coca1.produto._id),
     'busca aceita filtro por quantidade');
 
+  const buscaPrefixo = await buscarProdutos('coc');
+  check(buscaPrefixo.some((p) => String(p._id) === String(coca1.produto._id)),
+    'busca por prefixo "coc" encontra Coca-Cola');
+
+  const buscaAlias = await buscarProdutos('cola 2l');
+  check(buscaAlias.some((p) => String(p._id) === String(coca1.produto._id)),
+    'busca por alias "cola 2l" encontra Coca-Cola');
+
+  const buscaComErro = await buscarProdutos('detengerte girassol');
+  check(buscaComErro.some((p) => String(p._id) === String(det1.produto._id)),
+    'busca tolera erro de digitação em detergente');
+
   console.log(`\nResultado: ${ok} OK, ${falhou} falhas`);
   await mongoose.disconnect();
   await mongod.stop();
