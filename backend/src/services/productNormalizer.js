@@ -753,7 +753,7 @@ async function buscarProdutos(descricao, filtros = {}) {
     categoria: filtros.categoria || analiseBusca.categoria || undefined,
     tipo: filtros.tipo || analiseBusca.tipo || undefined,
     marca: filtros.marca || analiseBusca.marca || undefined,
-    quantidade: filtros.quantidade || undefined
+    quantidade: filtros.quantidade || analiseBusca.quantidade || undefined
   };
 
   const quantidadeNormalizada = filtros.quantidade

@@ -41,8 +41,11 @@ function check(cond, nome) {
   const coca2 = await encontrarOuCriarProduto('cocacola2L');
   const coca3 = await encontrarOuCriarProduto('COCA-COLA 2 L');
   const coca4 = await encontrarOuCriarProduto('coca2l');
+  const coca200 = await encontrarOuCriarProduto('COCA-COLA CAC ZERO 200ML');
   check([coca2, coca3, coca4].every((r) => !r.novo && String(r.produto._id) === String(coca1.produto._id)),
     'cocacola2L / coca-cola 2L / coca2L -> MESMO produto');
+  check(coca200.novo === true && String(coca200.produto._id) !== String(coca1.produto._id),
+    'Coca-Cola 200ml não mistura com Coca-Cola 2L');
   check(coca1.produto.nome === 'Coca-Cola 2L', 'Coca-Cola fica com nome organizado');
   check(coca1.produto.categoria === 'Bebidas' && coca1.produto.tipo === 'Refrigerante' && coca1.produto.marca === 'Coca-Cola',
     'Coca-Cola recebe categoria/tipo/marca');
@@ -144,6 +147,10 @@ function check(cond, nome) {
   const buscaBebida = await buscarProdutos('coca 2l', { categoria: 'Bebidas', tipo: 'Refrigerante' });
   check(buscaBebida.length === 1 && String(buscaBebida[0]._id) === String(coca1.produto._id),
     'busca aceita filtro por categoria/tipo');
+
+  const buscaCoca2l = await buscarProdutos('coca 2l');
+  check(buscaCoca2l.length === 1 && String(buscaCoca2l[0]._id) === String(coca1.produto._id),
+    'busca "coca 2l" não retorna embalagem 200ml');
 
   const buscaQuantidade = await buscarProdutos('coca', { categoria: 'Bebidas', quantidade: '2L' });
   check(buscaQuantidade.length === 1 && String(buscaQuantidade[0]._id) === String(coca1.produto._id),
