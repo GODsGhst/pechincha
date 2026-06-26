@@ -21,9 +21,15 @@ app.use((_req, res, next) => {
   next();
 });
 
+const defaultAllowedOrigins = [
+  'https://pechincha-web.onrender.com',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
-  : [];
+  : defaultAllowedOrigins;
 
 const corsOptions = {
   origin(origin, callback) {
