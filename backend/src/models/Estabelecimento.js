@@ -11,4 +11,7 @@ const estabelecimentoSchema = new mongoose.Schema({
   criado_em: { type: Date, default: Date.now }
 });
 
+estabelecimentoSchema.index({ nome: 1 });
+estabelecimentoSchema.index({ 'localizacao.lat': 1, 'localizacao.lng': 1 });
+
 module.exports = mongoose.model('Estabelecimento', estabelecimentoSchema);

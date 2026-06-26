@@ -21,5 +21,6 @@ const produtoSchema = new mongoose.Schema({
 });
 
 produtoSchema.index({ categoria: 1, tipo: 1, marca: 1, quantidade_normalizada: 1 });
+produtoSchema.index({ menor_preco: 1, criado_em: -1 });
 
 module.exports = mongoose.model('Produto', produtoSchema);

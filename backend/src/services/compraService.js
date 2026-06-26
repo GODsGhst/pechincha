@@ -1,6 +1,7 @@
 const Produto = require('../models/Produto');
 const HistoricoPreco = require('../models/HistoricoPreco');
 const productNormalizer = require('./productNormalizer');
+const cacheService = require('./cacheService');
 
 // Deduplicação de produtos: delega ao normalizador (fuzzy matching com fuse.js),
 // que trata as variações de escrita da notinha antes de salvar.
@@ -77,6 +78,7 @@ async function registrarPrecosEmLote(itens) {
       upsert: true
     }
   })));
+  cacheService.clear('produtos');
 
   const atualizacoesProduto = new Map();
   for (const item of registros) {
@@ -126,9 +128,10 @@ async function recalcularPrecos(produtoId) {
       menor_preco: menor ? menor.valor : null,
       ultimo_preco: ultimo
         ? { valor: ultimo.valor, data: ultimo.data, estabelecimento_id: ultimo.estabelecimento_id }
-        : {}
+      : {}
     }
   });
+  cacheService.clear('produtos');
 }
 
 // Remove o histórico vinculado a uma compra e recalcula os preços afetados
@@ -138,6 +141,7 @@ async function removerHistoricoDaCompra(compra) {
   for (const id of produtoIds) {
     await recalcularPrecos(id);
   }
+  cacheService.clear('produtos');
 }
 
 module.exports = {

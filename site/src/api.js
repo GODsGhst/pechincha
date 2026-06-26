@@ -4,6 +4,8 @@ const TOKEN_KEY = 'pechincha.web.token';
 const USER_KEY = 'pechincha.web.usuario';
 
 let authToken = localStorage.getItem(TOKEN_KEY);
+const cacheGet = new Map();
+const CACHE_MAX = 80;
 
 export function getStoredSession() {
   const usuario = localStorage.getItem(USER_KEY);
@@ -15,18 +17,46 @@ export function getStoredSession() {
 
 export function setStoredSession(token, usuario) {
   authToken = token;
+  cacheGet.clear();
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(usuario));
 }
 
 export function clearStoredSession() {
   authToken = null;
+  cacheGet.clear();
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 }
 
-async function request(method, path, body) {
+function getCache(key) {
+  const item = cacheGet.get(key);
+  if (!item) return null;
+  if (Date.now() > item.expiraEm) {
+    cacheGet.delete(key);
+    return null;
+  }
+  return item.valor;
+}
+
+function setCache(key, value, cacheMs) {
+  if (!cacheMs) return;
+  if (cacheGet.size >= CACHE_MAX) {
+    const [first] = cacheGet.keys();
+    cacheGet.delete(first);
+  }
+  cacheGet.set(key, { valor: value, expiraEm: Date.now() + cacheMs });
+}
+
+async function request(method, path, body, options = {}) {
+  const cacheMs = method === 'GET' ? Number(options.cacheMs || 0) : 0;
+  const cacheKey = cacheMs ? `${authToken || 'public'}:${API_BASE}${path}` : null;
+  const cached = cacheKey ? getCache(cacheKey) : null;
+  if (cached) return cached;
+
   let response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 30000);
   try {
     response = await fetch(API_BASE + path, {
       method,
@@ -34,12 +64,17 @@ async function request(method, path, body) {
         'Content-Type': 'application/json',
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
       },
-      body: body ? JSON.stringify(body) : undefined
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
     });
   } catch (error) {
-    const err = new Error(`Falha de conexão com a API em ${API_BASE}`);
+    const err = new Error(error?.name === 'AbortError'
+      ? 'A API demorou demais para responder.'
+      : `Falha de conexão com a API em ${API_BASE}`);
     err.cause = error;
     throw err;
+  } finally {
+    clearTimeout(timeout);
   }
 
   let json = null;
@@ -56,12 +91,14 @@ async function request(method, path, body) {
     throw err;
   }
 
+  if (method !== 'GET') cacheGet.clear();
+  if (cacheKey) setCache(cacheKey, json, cacheMs);
   return json;
 }
 
 export const api = {
-  get: (path) => request('GET', path),
-  post: (path, body) => request('POST', path, body),
-  put: (path, body) => request('PUT', path, body),
-  delete: (path) => request('DELETE', path)
+  get: (path, options) => request('GET', path, undefined, options),
+  post: (path, body, options) => request('POST', path, body, options),
+  put: (path, body, options) => request('PUT', path, body, options),
+  delete: (path, options) => request('DELETE', path, undefined, options)
 };

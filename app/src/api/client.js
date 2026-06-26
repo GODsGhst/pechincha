@@ -109,6 +109,7 @@ async function request(metodo, caminho, corpo, opcoes = {}) {
     erro.payload = json;
     throw erro;
   }
+  if (metodo !== 'GET') cacheGet.clear();
   if (cacheKey) salvarCacheGet(cacheKey, json, cacheMs);
   return json;
 }

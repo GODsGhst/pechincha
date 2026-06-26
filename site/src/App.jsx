@@ -9,6 +9,7 @@ import {
   Minus,
   PackageSearch,
   Plus,
+  ReceiptText,
   RefreshCw,
   Save,
   Search,
@@ -214,6 +215,57 @@ function ListItem({ item, onToggle, onQuantity, onRemove }) {
   );
 }
 
+function formatQty(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return value || '1';
+  return number.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+}
+
+function ReceiptSummary({ receipt, active, onOpen }) {
+  return (
+    <button className={active ? 'receipt-row active' : 'receipt-row'} onClick={() => onOpen(receipt)} type="button">
+      <span className="receipt-icon"><ReceiptText size={16} /></span>
+      <span className="receipt-main">
+        <strong>{receipt.estabelecimento || 'Estabelecimento'}</strong>
+        <em>{shortDate(receipt.data_compra || receipt.recebido_em)}</em>
+      </span>
+      <span className="receipt-total">{money(receipt.valor_total)}</span>
+    </button>
+  );
+}
+
+function ReceiptDetail({ receipt, onClose }) {
+  if (!receipt) {
+    return <div className="empty-state">Selecione uma notinha.</div>;
+  }
+
+  return (
+    <section className="receipt-detail">
+      <div className="receipt-detail-head">
+        <div>
+          <h3>{receipt.estabelecimento || 'Estabelecimento'}</h3>
+          <p>{shortDate(receipt.data_compra || receipt.recebido_em)} · {money(receipt.valor_total)}</p>
+        </div>
+        <button className="ghost icon-only" onClick={onClose} type="button">
+          <Minus size={15} />
+        </button>
+      </div>
+      <div className="receipt-items">
+        {(receipt.itens || []).map((item, index) => (
+          <article key={`${item.produto_id || item.nome_original || index}-${index}`} className="receipt-product">
+            <div>
+              <h4>{item.produto || item.nome_original || 'Produto'}</h4>
+              {productMeta(item) && <p>{productMeta(item)}</p>}
+              {item.nome_original && item.produto && item.nome_original !== item.produto && <em>{item.nome_original}</em>}
+            </div>
+            <strong>{formatQty(item.quantidade)}x {money(item.valor_unitario)}</strong>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Dashboard({ usuario, onLogout, onOpenAdmin }) {
   const [products, setProducts] = useState([]);
   const [filters, setFilters] = useState({ categorias: [], tipos: [], marcas: [], quantidades: [] });
@@ -225,8 +277,11 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
   const [suggestions, setSuggestions] = useState([]);
   const [list, setList] = useState([]);
   const [analysis, setAnalysis] = useState(null);
+  const [purchases, setPurchases] = useState([]);
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingList, setLoadingList] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [message, setMessage] = useState('');
 
   const selectedItems = useMemo(() => list.filter((item) => item.selecionado), [list]);
@@ -248,6 +303,23 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
       setMessage(err.message || 'Não foi possível carregar a lista.');
     } finally {
       setLoadingList(false);
+    }
+  }, []);
+
+  const loadPurchases = useCallback(async () => {
+    setLoadingHistory(true);
+    try {
+      const data = await api.get('/compras?limite=12', { cacheMs: 15000 });
+      const nextPurchases = data.compras || [];
+      setPurchases(nextPurchases);
+      setSelectedReceipt((current) => {
+        if (!current) return null;
+        return nextPurchases.find((item) => item.id === current.id) || current;
+      });
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível carregar o histórico.');
+    } finally {
+      setLoadingHistory(false);
     }
   }, []);
 
@@ -294,6 +366,10 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
   useEffect(() => {
     loadList();
   }, [loadList]);
+
+  useEffect(() => {
+    loadPurchases();
+  }, [loadPurchases]);
 
   useEffect(() => {
     loadFilters();
@@ -357,6 +433,16 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
       setList(data.itens || []);
     } catch (err) {
       setMessage(err.message || 'Não foi possível remover.');
+    }
+  }
+
+  async function openReceipt(receipt) {
+    setSelectedReceipt(receipt);
+    try {
+      const detail = await api.get(`/compras/${receipt.id}`, { cacheMs: 15000 });
+      setSelectedReceipt(detail);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível abrir a notinha.');
     }
   }
 
@@ -558,6 +644,35 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
               </div>
             )}
           </div>
+
+          <div className="history-panel">
+            <div className="panel-head slim">
+              <div>
+                <h2>Histórico</h2>
+                <p>{purchases.length} notinhas recentes</p>
+              </div>
+              <button className="ghost icon-only" onClick={loadPurchases} type="button" disabled={loadingHistory}>
+                <RefreshCw size={17} />
+              </button>
+            </div>
+            {loadingHistory ? (
+              <div className="empty-state">Carregando histórico.</div>
+            ) : purchases.length === 0 ? (
+              <div className="empty-state">Nenhuma notinha salva.</div>
+            ) : (
+              <div className="receipt-list">
+                {purchases.map((receipt) => (
+                  <ReceiptSummary
+                    key={receipt.id}
+                    receipt={receipt}
+                    active={selectedReceipt?.id === receipt.id}
+                    onOpen={openReceipt}
+                  />
+                ))}
+              </div>
+            )}
+            <ReceiptDetail receipt={selectedReceipt} onClose={() => setSelectedReceipt(null)} />
+          </div>
         </aside>
       </section>
     </main>
@@ -566,12 +681,14 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
 
 function shortDate(value) {
   if (!value) return '--';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
     month: '2-digit',
     hour: '2-digit',
     minute: '2-digit'
-  }).format(new Date(value));
+  }).format(date);
 }
 
 const emptyProductForm = {

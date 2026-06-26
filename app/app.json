@@ -2,7 +2,7 @@
   "expo": {
     "name": "Pechincha",
     "slug": "pechincha",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "pechincha",
@@ -23,7 +23,7 @@
     },
     "android": {
       "package": "com.consultprice.app",
-      "versionCode": 7,
+      "versionCode": 8,
       "adaptiveIcon": {
         "backgroundColor": "#0E3D2A",
         "foregroundImage": "./assets/android-icon-foreground.png",

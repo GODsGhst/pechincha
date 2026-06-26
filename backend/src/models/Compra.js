@@ -27,5 +27,6 @@ compraSchema.index(
   { unique: true, partialFilterExpression: { chave_acesso: { $type: 'string' } } }
 );
 compraSchema.index({ usuario_id: 1, data_compra: -1 });
+compraSchema.index({ usuario_id: 1, recebido_em: -1, data_compra: -1 });
 
 module.exports = mongoose.model('Compra', compraSchema);

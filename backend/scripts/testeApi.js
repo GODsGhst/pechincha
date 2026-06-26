@@ -125,6 +125,8 @@ async function main() {
   verificar(corsPermitido.status === 200 &&
     corsPermitido.headers.get('access-control-allow-origin') === 'https://pechincha-web.onrender.com',
     'CORS permite apenas origem web configurada');
+  verificar((corsPermitido.headers.get('cache-control') || '').includes('public'),
+    'GET público de produtos usa cache HTTP curto');
 
   const corsBloqueado = await req('GET', '/produtos', null, null, { Origin: 'https://site-estranho.example' });
   verificar(corsBloqueado.status === 200 && !corsBloqueado.headers.get('access-control-allow-origin'),
@@ -146,6 +148,8 @@ async function main() {
   const me = await req('GET', '/auth/me', null, token);
   verificar(me.status === 200 && me.json.usuario.email === 'joao@email.com',
     'auth/me retorna usuário atual autenticado');
+  verificar((me.headers.get('cache-control') || '').includes('no-store'),
+    'dados autenticados usam no-store');
 
   const loginErrado = await req('POST', '/auth/login', { email: 'joao@email.com', senha: 'errada' });
   verificar(loginErrado.status === 401, 'login com senha errada retorna 401');
@@ -242,6 +246,12 @@ async function main() {
     oleoAlimento.json.tipo === 'Óleo' &&
     oleoAlimento.json.quantidade === '900ml',
     'óleo entra em Alimentos com unidade líquida');
+  const imagemInsegura = await req('POST', '/produtos', {
+    nome: 'PRODUTO IMAGEM TESTE 1UN',
+    imagem_url: 'http://example.com/produto.png'
+  }, adminToken);
+  verificar(imagemInsegura.status === 201 && imagemInsegura.json.imagem_url === null,
+    'imagem de produto admin exige HTTPS');
 
   const filtrosProdutos = await req('GET', '/produtos/filtros?categoria=Alimentos');
   verificar(filtrosProdutos.status === 200 &&
@@ -328,6 +338,9 @@ async function main() {
   console.log('\n--- Compras ---');
   const compras = await req('GET', '/compras', null, token);
   verificar(compras.status === 200 && compras.json.compras.length === 2, 'usuário tem 2 compras');
+  const comprasLimitadas = await req('GET', '/compras?limite=1', null, token);
+  verificar(comprasLimitadas.status === 200 && comprasLimitadas.json.compras.length === 1,
+    'histórico de compras aceita limite para desktop/app');
   const compraDetalhe = await req('GET', `/compras/${compraId}`, null, token);
   verificar(compraDetalhe.status === 200 && compraDetalhe.json.itens.length === 3,
     'detalhe da compra abre a notinha com 3 itens');
@@ -385,10 +398,16 @@ async function main() {
 
   // Por último, para não perturbar as contagens acima (adiciona estabelecimento/produto novos)
   console.log('\n--- Chave de acesso e deduplicação de cupom ---');
+  const buscaAcucarAntes = await req('GET', '/produtos?nome=acucar');
+  verificar(buscaAcucarAntes.status === 200 && buscaAcucarAntes.json.produtos.length === 0,
+    'cache guarda busca vazia antes de produto novo');
   const comChave = await req('POST', '/nfce/processar', { html: HTML_COM_CHAVE }, token);
   verificar(comChave.status === 201, 'cupom com chave retorna 201');
   verificar(comChave.json.chave_acesso === '31250612345678000190650010000012341000012345',
     'chave de acesso extraída (44 dígitos, espaços removidos)', JSON.stringify(comChave.json.chave_acesso));
+  const buscaAcucarDepois = await req('GET', '/produtos?nome=acucar');
+  verificar(buscaAcucarDepois.status === 200 && buscaAcucarDepois.json.produtos.some((p) => p.tipo === 'Açúcar'),
+    'importação de cupom invalida cache de produtos');
 
   const reimport = await req('POST', '/nfce/processar', { html: HTML_COM_CHAVE }, token);
   verificar(reimport.status === 409, 'reimportar o mesmo cupom retorna 409', JSON.stringify(reimport.json));

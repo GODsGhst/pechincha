@@ -40,8 +40,10 @@ function formatar(compra) {
 // GET /api/compras — compras do usuário autenticado
 async function listar(req, res, next) {
   try {
+    const limite = Math.min(Math.max(Number(req.query.limite) || 50, 1), 100);
     const compras = await Compra.find({ usuario_id: req.usuario.id })
       .sort({ recebido_em: -1, data_compra: -1 })
+      .limit(limite)
       .populate('estabelecimento_id', 'nome')
       .populate('itens.produto_id', 'nome categoria tipo marca quantidade');
 

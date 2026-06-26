@@ -5,12 +5,12 @@ const productNormalizer = require('../services/productNormalizer');
 const productImageService = require('../services/productImageService');
 const displayFormatter = require('../services/displayFormatter');
 const pricePresentation = require('../services/pricePresentationService');
+const cacheService = require('../services/cacheService');
 const { registrarAdminAudit } = require('../services/adminAuditService');
 
 const CACHE_TTL_MS = 20 * 1000;
 const CACHE_MAX = 120;
 const LIMITE_FALLBACK_FILTROS = 1000;
-const cacheRespostas = new Map();
 
 function escapeRegex(texto) {
   return texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -51,25 +51,28 @@ function chaveCache(prefixo, query = {}) {
 }
 
 function obterCache(chave) {
-  const item = cacheRespostas.get(chave);
-  if (!item) return null;
-  if (Date.now() - item.criadoEm > CACHE_TTL_MS) {
-    cacheRespostas.delete(chave);
-    return null;
-  }
-  return item.valor;
+  return cacheService.get('produtos', chave);
 }
 
 function salvarCache(chave, valor) {
-  if (cacheRespostas.size >= CACHE_MAX) {
-    const [primeira] = cacheRespostas.keys();
-    cacheRespostas.delete(primeira);
-  }
-  cacheRespostas.set(chave, { valor, criadoEm: Date.now() });
+  cacheService.set('produtos', chave, valor, { ttlMs: CACHE_TTL_MS, max: CACHE_MAX });
 }
 
 function limparCache() {
-  cacheRespostas.clear();
+  cacheService.clear('produtos');
+}
+
+function imagemUrlSegura(valor) {
+  const texto = String(valor || '').trim();
+  if (!texto) return null;
+  if (texto.length > 700) return null;
+  try {
+    const url = new URL(texto);
+    if (url.protocol !== 'https:') return null;
+    return url.toString();
+  } catch (_e) {
+    return null;
+  }
 }
 
 const { arredondar, precoPorMedida, confiancaPreco } = pricePresentation;
@@ -657,7 +660,7 @@ async function criar(req, res, next) {
       marca: analise.marca,
       quantidade: quantidadeLimpa || analise.quantidade,
       quantidade_normalizada: analise.quantidade_normalizada,
-      imagem_url: imagem_url || null,
+      imagem_url: imagemUrlSegura(imagem_url),
       imagem_credito: imagem_credito || null
     });
     limparCache();
@@ -714,7 +717,7 @@ async function atualizar(req, res, next) {
     if (categoria !== undefined) atualizacao.categoria = categoria || null;
     if (tipo !== undefined) atualizacao.tipo = tipo || null;
     if (marca !== undefined) atualizacao.marca = marca || null;
-    if (imagem_url !== undefined) atualizacao.imagem_url = imagem_url || null;
+    if (imagem_url !== undefined) atualizacao.imagem_url = imagemUrlSegura(imagem_url);
     if (imagem_credito !== undefined) atualizacao.imagem_credito = imagem_credito || null;
 
     const produto = await Produto.findByIdAndUpdate(req.params.id, atualizacao, { new: true });
@@ -763,4 +766,4 @@ async function remover(req, res, next) {
   }
 }
 
-module.exports = { listar, menores, filtros, sugestoes, detalhar, criar, atualizar, remover };
+module.exports = { listar, menores, filtros, sugestoes, detalhar, criar, atualizar, remover, limparCache };
