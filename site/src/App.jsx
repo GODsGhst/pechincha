@@ -53,6 +53,25 @@ function productMeta(product) {
     .join(' · ');
 }
 
+function ProductThumb({ uri, compact = false, iconSize = 18 }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = Boolean(uri) && !failed;
+
+  useEffect(() => {
+    setFailed(false);
+  }, [uri]);
+
+  return (
+    <div className={compact ? 'product-icon compact' : 'product-icon'}>
+      {showImage ? (
+        <img src={uri} alt="" loading="lazy" onError={() => setFailed(true)} />
+      ) : (
+        <ShoppingCart size={iconSize} />
+      )}
+    </div>
+  );
+}
+
 function LoginView({ onLogin }) {
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ nome: '', email: '', senha: '' });
@@ -161,9 +180,7 @@ function ProductRow({ product, inList, onAdd }) {
 
   return (
     <article className="product-row">
-      <div className="product-icon">
-        {product.imagem_url ? <img src={product.imagem_url} alt="" loading="lazy" /> : <ShoppingCart size={18} />}
-      </div>
+      <ProductThumb uri={product.imagem_url} />
       <div className="product-main">
         <h3>{product.nome}</h3>
         {productMeta(product) && <p>{productMeta(product)}</p>}
@@ -190,9 +207,7 @@ function ListItem({ item, onToggle, onQuantity, onRemove }) {
       <button className={item.selecionado ? 'check-button selected' : 'check-button'} onClick={() => onToggle(item)} type="button">
         {item.selecionado && <Check size={15} />}
       </button>
-      <div className="product-icon compact">
-        {item.imagem_url ? <img src={item.imagem_url} alt="" loading="lazy" /> : <ShoppingCart size={16} />}
-      </div>
+      <ProductThumb uri={item.imagem_url} compact iconSize={16} />
       <div className="list-main">
         <h3>{item.nome}</h3>
         {productMeta(item) && <p>{productMeta(item)}</p>}
@@ -253,9 +268,7 @@ function ReceiptDetail({ receipt, onClose }) {
       <div className="receipt-items">
         {(receipt.itens || []).map((item, index) => (
           <article key={`${item.produto_id || item.nome_original || index}-${index}`} className="receipt-product">
-            <div className="product-icon compact">
-              {item.imagem_url ? <img src={item.imagem_url} alt="" loading="lazy" /> : <ShoppingCart size={16} />}
-            </div>
+            <ProductThumb uri={item.imagem_url} compact iconSize={16} />
             <div className="receipt-product-main">
               <h4>{item.produto || item.nome_original || 'Produto'}</h4>
               {productMeta(item) && <p>{productMeta(item)}</p>}
