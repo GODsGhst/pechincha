@@ -113,7 +113,7 @@ function combinaFiltrosInferidos(produto, filtros, ignorarCampo = null) {
   if (ignorarCampo) delete efetivos[ignorarCampo];
   const meta = metadadosProduto(produto);
   return productNormalizer.analiseCombinaFiltros(meta, efetivos) &&
-    quantidadeCompativelComCategoria(meta, efetivos);
+    quantidadeCompativelComFiltros(meta, efetivos);
 }
 
 function ordenarTexto(lista) {
@@ -125,12 +125,75 @@ function textoIgual(a, b) {
   return productNormalizer.normalizarTexto(a || '') === productNormalizer.normalizarTexto(b || '');
 }
 
-function quantidadeCompativelComCategoria(meta, filtros = {}) {
+const UNIDADES_POR_TIPO = new Map([
+  ['refrigerante', ['ml']],
+  ['agua', ['ml']],
+  ['suco', ['ml']],
+  ['cerveja', ['ml']],
+  ['leite', ['ml']],
+  ['detergente', ['ml']],
+  ['amaciante', ['ml']],
+  ['desinfetante', ['ml']],
+  ['agua sanitaria', ['ml']],
+  ['limpa aluminio', ['ml']],
+  ['limpador', ['ml']],
+  ['sabao', ['g', 'ml']],
+  ['esponja', ['un']],
+  ['papel higienico', ['un']],
+  ['sabonete', ['g', 'un']],
+  ['shampoo', ['ml']],
+  ['condicionador', ['ml']],
+  ['creme dental', ['g']],
+  ['desodorante', ['ml', 'g']],
+  ['absorvente', ['un']],
+  ['arroz', ['g']],
+  ['feijao', ['g']],
+  ['cafe', ['g']],
+  ['acucar', ['g']],
+  ['oleo', ['ml']],
+  ['macarrao', ['g']],
+  ['farinha', ['g']],
+  ['biscoito', ['g']],
+  ['molho', ['g', 'ml']],
+  ['sal', ['g']],
+  ['carne', ['g']],
+  ['frango', ['g']],
+  ['linguica', ['g']],
+  ['banana', ['g', 'un']],
+  ['tomate', ['g', 'un']],
+  ['cebola', ['g', 'un']],
+  ['batata', ['g', 'un']],
+  ['alface', ['g', 'un']]
+]);
+
+const UNIDADES_POR_CATEGORIA = new Map([
+  ['bebidas', ['ml']],
+  ['acougue', ['g']]
+]);
+
+function chaveUnidade(texto) {
+  return productNormalizer.normalizarTexto(texto || '');
+}
+
+function unidadeDaQuantidade(meta) {
+  const quantidadeNormalizada = String(meta.quantidade_normalizada || '');
+  if (quantidadeNormalizada.endsWith('ml')) return 'ml';
+  if (quantidadeNormalizada.endsWith('g')) return 'g';
+  if (quantidadeNormalizada.endsWith('un')) return 'un';
+  return null;
+}
+
+function quantidadeCompativelComFiltros(meta, filtros = {}) {
+  const unidade = unidadeDaQuantidade(meta);
+  if (!unidade) return true;
+
+  const tipo = filtros.tipo || meta.tipo;
+  const unidadesDoTipo = UNIDADES_POR_TIPO.get(chaveUnidade(tipo));
+  if (unidadesDoTipo) return unidadesDoTipo.includes(unidade);
+
   const categoria = filtros.categoria || meta.categoria;
-  if (textoIgual(categoria, 'Bebidas')) {
-    return !meta.quantidade_normalizada || meta.quantidade_normalizada.endsWith('ml');
-  }
-  return true;
+  const unidadesDaCategoria = UNIDADES_POR_CATEGORIA.get(chaveUnidade(categoria));
+  return unidadesDaCategoria ? unidadesDaCategoria.includes(unidade) : true;
 }
 
 function mesclarProdutos(...listas) {
@@ -304,7 +367,9 @@ async function buscarProdutosSemNome(filtros) {
   ]);
 
   const inferidos = candidatos.filter((produto) => combinaFiltrosInferidos(produto, filtros));
-  return mesclarProdutos(diretos, inferidos).slice(0, 100);
+  return mesclarProdutos(diretos, inferidos)
+    .filter((produto) => combinaFiltrosInferidos(produto, filtros))
+    .slice(0, 100);
 }
 
 // GET /api/produtos?nome=arroz&categoria=Alimentos&tipo=Arroz&marca=Tio%20João&quantidade=5kg
@@ -469,7 +534,7 @@ async function filtros(req, res, next) {
 
     const quantidades = ordenarTexto(metas
       .filter((meta) => combinaFiltrosInferidos(meta, filtrosAtuais, 'quantidade'))
-      .filter((meta) => meta.quantidade && quantidadeCompativelComCategoria(meta, filtrosAtuais))
+      .filter((meta) => meta.quantidade && quantidadeCompativelComFiltros(meta, filtrosAtuais))
       .map((meta) => meta.quantidade));
 
     const payload = { categorias, tipos, marcas, quantidades };

@@ -224,9 +224,26 @@ async function main() {
   verificar(filtroArroz.status === 200 && filtroArroz.json.produtos.length === 1,
     'filtro por categoria/tipo/quantidade retorna arroz');
 
+  const oleoAlimento = await req('POST', '/produtos', { nome: 'OLEO SOYA 900ML' }, adminToken);
+  verificar(oleoAlimento.status === 201 &&
+    oleoAlimento.json.categoria === 'Alimentos' &&
+    oleoAlimento.json.tipo === 'Óleo' &&
+    oleoAlimento.json.quantidade === '900ml',
+    'óleo entra em Alimentos com unidade líquida');
+
   const filtrosProdutos = await req('GET', '/produtos/filtros?categoria=Alimentos');
-  verificar(filtrosProdutos.status === 200 && filtrosProdutos.json.tipos.includes('Arroz') && filtrosProdutos.json.quantidades.includes('5kg'),
-    'endpoint de filtros retorna tipos e quantidades');
+  verificar(filtrosProdutos.status === 200 &&
+    filtrosProdutos.json.tipos.includes('Arroz') &&
+    filtrosProdutos.json.tipos.includes('Óleo') &&
+    filtrosProdutos.json.quantidades.includes('5kg') &&
+    filtrosProdutos.json.quantidades.includes('900ml'),
+    'Alimentos mostra peso e líquido quando só categoria está selecionada');
+
+  const filtrosArrozTipo = await req('GET', '/produtos/filtros?categoria=Alimentos&tipo=Arroz');
+  verificar(filtrosArrozTipo.status === 200 &&
+    filtrosArrozTipo.json.quantidades.includes('5kg') &&
+    !filtrosArrozTipo.json.quantidades.includes('900ml'),
+    'tipo Arroz não mostra tamanhos líquidos');
 
   const chocolateAoLeite = await req('POST', '/produtos', { nome: 'NESTLE AO LEITE CHOC KITKAT 42G' }, adminToken);
   verificar(chocolateAoLeite.status === 201 &&
