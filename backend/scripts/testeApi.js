@@ -326,6 +326,16 @@ async function main() {
   verificar(listaRemovida.status === 200 && listaRemovida.json.itens.length === 0,
     'remove produto da lista sincronizada');
 
+  await Promise.all([
+    req('POST', '/lista/itens', { produto_id: arroz.id, quantidade: 1 }, token),
+    req('POST', '/lista/itens', { produto_id: arroz.id, quantidade: 1 }, token)
+  ]);
+  const listaConcorrente = await req('GET', '/lista', null, token);
+  verificar(listaConcorrente.status === 200 &&
+    listaConcorrente.json.itens.filter((item) => item.id === arroz.id).length === 1,
+    'adição simultânea do mesmo produto não duplica item na lista');
+  await req('DELETE', `/lista/itens/${arroz.id}`, null, token);
+
   const compraOriginal = await Compra.findById(compraId);
   const produtoArroz = await Produto.findById(arroz.id);
   const totalHistoricoAntes = await HistoricoPreco.countDocuments({ produto_id: produtoArroz._id });

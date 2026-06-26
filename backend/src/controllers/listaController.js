@@ -21,6 +21,10 @@ function quantidadeValida(valor) {
   return Number.isFinite(numero) && numero > 0 ? numero : null;
 }
 
+function erroDuplicidadeMongo(err) {
+  return err && (err.code === 11000 || err.code === 11001);
+}
+
 function populateLista(queryOuDoc) {
   return queryOuDoc.populate({
     path: 'itens.produto_id',
@@ -72,11 +76,24 @@ function responderLista(res, lista) {
 }
 
 async function buscarOuCriarLista(usuarioId) {
-  let lista = await ListaCompra.findOne({ usuario_id: usuarioId });
-  if (!lista) {
-    lista = await ListaCompra.create({ usuario_id: usuarioId, itens: [] });
+  try {
+    const lista = await ListaCompra.findOneAndUpdate(
+      { usuario_id: usuarioId },
+      {
+        $setOnInsert: {
+          usuario_id: usuarioId,
+          itens: [],
+          atualizado_em: new Date()
+        }
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    return populateLista(lista);
+  } catch (err) {
+    if (!erroDuplicidadeMongo(err)) throw err;
+    const lista = await ListaCompra.findOne({ usuario_id: usuarioId });
+    return populateLista(lista);
   }
-  return populateLista(lista);
 }
 
 async function listar(req, res, next) {
@@ -105,29 +122,67 @@ async function adicionarItem(req, res, next) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
 
-    let lista = await ListaCompra.findOne({ usuario_id: req.usuario.id });
-    if (!lista) {
-      lista = await ListaCompra.create({ usuario_id: req.usuario.id, itens: [] });
+    const agora = new Date();
+    const selecionadoInformado = req.body.selecionado !== undefined;
+    const setExistente = {
+      'itens.$.quantidade': quantidade,
+      'itens.$.atualizado_em': agora,
+      atualizado_em: agora
+    };
+    if (selecionadoInformado) {
+      setExistente['itens.$.selecionado'] = boolOuPadrao(req.body.selecionado, true);
     }
 
-    const agora = new Date();
-    const indice = lista.itens.findIndex((item) => String(item.produto_id) === String(produto._id));
-    if (indice >= 0) {
-      lista.itens[indice].quantidade = quantidade;
-      lista.itens[indice].selecionado = boolOuPadrao(req.body.selecionado, lista.itens[indice].selecionado);
-      lista.itens[indice].atualizado_em = agora;
-    } else {
-      lista.itens.push({
+    let lista = await ListaCompra.findOneAndUpdate(
+      { usuario_id: req.usuario.id, 'itens.produto_id': produto._id },
+      { $set: setExistente },
+      { new: true }
+    );
+
+    if (!lista) {
+      const novoItem = {
         produto_id: produto._id,
         quantidade,
         selecionado: boolOuPadrao(req.body.selecionado, true),
         adicionado_em: agora,
         atualizado_em: agora
-      });
+      };
+
+      try {
+        lista = await ListaCompra.findOneAndUpdate(
+          { usuario_id: req.usuario.id, 'itens.produto_id': { $ne: produto._id } },
+          {
+            $setOnInsert: { usuario_id: req.usuario.id },
+            $set: { atualizado_em: agora },
+            $push: { itens: novoItem }
+          },
+          { new: true, upsert: true, setDefaultsOnInsert: true }
+        );
+      } catch (err) {
+        if (!erroDuplicidadeMongo(err)) throw err;
+        lista = await ListaCompra.findOneAndUpdate(
+          { usuario_id: req.usuario.id, 'itens.produto_id': { $ne: produto._id } },
+          {
+            $set: { atualizado_em: agora },
+            $push: { itens: novoItem }
+          },
+          { new: true }
+        );
+      }
     }
 
-    lista.atualizado_em = agora;
-    await lista.save();
+    if (!lista) {
+      lista = await ListaCompra.findOneAndUpdate(
+        { usuario_id: req.usuario.id, 'itens.produto_id': produto._id },
+        { $set: setExistente },
+        { new: true }
+      );
+    }
+
+    if (!lista) {
+      lista = await buscarOuCriarLista(req.usuario.id);
+    }
+
     await populateLista(lista);
 
     return responderLista(res, lista);
