@@ -14,6 +14,13 @@ import { tempoRelativo } from '../utils/format';
 
 const DISTANCIAS = [5, 10, 20, 50];
 const GPS_TIMEOUT_MS = 12000;
+const MAPA_HOSTS_PERMITIDOS = new Set([
+  'unpkg.com',
+  'tile.openstreetmap.org',
+  'a.tile.openstreetmap.org',
+  'b.tile.openstreetmap.org',
+  'c.tile.openstreetmap.org'
+]);
 
 function distanciaKm(origem, destino) {
   if (!origem || !destino) return null;
@@ -48,6 +55,18 @@ function zoomPorDistancia(distancia) {
   return 9;
 }
 
+function permitirNavegacaoMapa(request) {
+  const urlTexto = request?.url || '';
+  if (!urlTexto || urlTexto === 'about:blank') return true;
+
+  try {
+    const url = new URL(urlTexto);
+    return url.protocol === 'https:' && MAPA_HOSTS_PERMITIDOS.has(url.hostname);
+  } catch (_e) {
+    return false;
+  }
+}
+
 function htmlMapa({ localizacao, lojas, distancia }) {
   const centro = centroDoMapa(localizacao, lojas);
   if (!centro) return null;
@@ -67,7 +86,8 @@ function htmlMapa({ localizacao, lojas, distancia }) {
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline' https://unpkg.com; script-src 'self' 'unsafe-inline' https://unpkg.com; img-src https://*.tile.openstreetmap.org data:; connect-src https://*.tile.openstreetmap.org; font-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
   <style>
     html, body, #map { height: 100%; margin: 0; padding: 0; background: #eef1ec; }
     .leaflet-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -77,7 +97,7 @@ function htmlMapa({ localizacao, lojas, distancia }) {
 </head>
 <body>
   <div id="map"></div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
   <script>
     const centro = ${JSON.stringify(centro)};
     const usuario = ${JSON.stringify(localizacao || null)};
@@ -375,12 +395,19 @@ export default function AreaScreen({ navigation }) {
           {mapaHtml ? (
             <WebView
               key={`${localizacao?.lat || 'lojas'}-${distancia}-${lojasNoMapa.length}`}
-              originWhitelist={['*']}
+              originWhitelist={['about:blank', 'https://unpkg.com', 'https://*.tile.openstreetmap.org']}
               source={{ html: mapaHtml }}
               style={styles.mapaWeb}
               javaScriptEnabled
-              domStorageEnabled
+              domStorageEnabled={false}
               scrollEnabled={false}
+              mixedContentMode="never"
+              allowFileAccess={false}
+              allowFileAccessFromFileURLs={false}
+              allowUniversalAccessFromFileURLs={false}
+              setSupportMultipleWindows={false}
+              thirdPartyCookiesEnabled={false}
+              onShouldStartLoadWithRequest={permitirNavegacaoMapa}
               onMessage={mensagemMapa}
             />
           ) : (

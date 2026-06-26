@@ -3,12 +3,15 @@ require('dotenv').config();
 const cluster = require('cluster');
 const os = require('os');
 const connectDB = require('./src/config/database');
+const { validarAmbiente } = require('./src/config/env');
 
 const PORT = process.env.PORT || 3001;
 const WORKERS = Math.max(1, Math.min(
   Number(process.env.WEB_CONCURRENCY) || 1,
   os.cpus().length
 ));
+
+validarAmbiente();
 
 function iniciarWorker() {
   const app = require('./src/app');
