@@ -3,6 +3,7 @@ const dns = require('dns').promises;
 const net = require('net');
 const Compra = require('../models/Compra');
 const Estabelecimento = require('../models/Estabelecimento');
+const ImportacaoNfce = require('../models/ImportacaoNfce');
 const { parseNfceHtml, chaveAcessoDaUrl } = require('../services/nfceParser');
 const compraService = require('../services/compraService');
 const { geocodificarEndereco } = require('../services/geoService');
@@ -11,11 +12,20 @@ const displayFormatter = require('../services/displayFormatter');
 
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
+const IMPORTACAO_EXPIRADA_MS = 15 * 60 * 1000;
 
 function erroValidacaoUrl(mensagem) {
   const erro = new Error(mensagem);
   erro.status = 422;
   return erro;
+}
+
+function erroDuplicidadeMongo(err) {
+  return err && (err.code === 11000 || err.code === 11001);
+}
+
+function mesmoId(a, b) {
+  return a && b && String(a) === String(b);
 }
 
 function ipPrivadoOuReservado(address) {
@@ -151,6 +161,146 @@ function atualizarLocalizacaoEmSegundoPlano(estabelecimentoId, endereco) {
     });
 }
 
+async function buscarCompraPorChave(chaveAcesso) {
+  if (!chaveAcesso) return null;
+  return Compra.findOne({ chave_acesso: chaveAcesso })
+    .select('_id usuario_id chave_acesso criado_em recebido_em processado_em data_compra')
+    .lean();
+}
+
+async function responderImportacaoExistente(res, {
+  chaveAcesso,
+  usuarioId,
+  compraExistente = null,
+  importacaoExistente = null
+}) {
+  const importacao = importacaoExistente || await ImportacaoNfce.findOne({ chave_acesso: chaveAcesso }).lean();
+  const compra = compraExistente ||
+    (importacao && importacao.compra_id
+      ? await Compra.findById(importacao.compra_id)
+        .select('_id usuario_id chave_acesso criado_em recebido_em processado_em data_compra')
+        .lean()
+      : await buscarCompraPorChave(chaveAcesso));
+
+  const emProcessamento = importacao && importacao.status === 'processando' && !compra;
+  const donoId = compra ? compra.usuario_id : importacao && importacao.usuario_id;
+  const pertenceAoUsuario = mesmoId(donoId, usuarioId);
+
+  return res.status(409).json({
+    error: emProcessamento
+      ? 'Este cupom fiscal já está sendo processado'
+      : 'Este cupom fiscal já foi importado',
+    status_importacao: emProcessamento ? 'processando' : 'concluida',
+    compra_id: pertenceAoUsuario && compra ? compra._id : null,
+    chave_acesso: chaveAcesso,
+    pertence_ao_usuario: Boolean(pertenceAoUsuario),
+    recebido_em: (importacao && importacao.recebido_em) ||
+      (compra && (compra.recebido_em || compra.criado_em)) ||
+      null,
+    importado_em: compra
+      ? (compra.processado_em || compra.recebido_em || compra.criado_em || compra.data_compra)
+      : null
+  });
+}
+
+async function reservarImportacaoNfce(chaveAcesso, usuarioId, recebidoEm) {
+  try {
+    const importacao = await ImportacaoNfce.create({
+      chave_acesso: chaveAcesso,
+      usuario_id: usuarioId,
+      recebido_em: recebidoEm,
+      status: 'processando'
+    });
+    return { reservada: true, importacao };
+  } catch (err) {
+    if (!erroDuplicidadeMongo(err)) throw err;
+
+    const expiradaAntesDe = new Date(recebidoEm.getTime() - IMPORTACAO_EXPIRADA_MS);
+    const importacaoRecuperada = await ImportacaoNfce.findOneAndUpdate(
+      {
+        chave_acesso: chaveAcesso,
+        compra_id: null,
+        $or: [
+          { status: 'falhou' },
+          { status: 'processando', recebido_em: { $lt: expiradaAntesDe } }
+        ]
+      },
+      {
+        $set: {
+          usuario_id: usuarioId,
+          recebido_em: recebidoEm,
+          status: 'processando',
+          compra_id: null,
+          processado_em: null,
+          tempo_processamento_ms: null,
+          erro: null
+        }
+      },
+      { new: true }
+    );
+
+    if (importacaoRecuperada) return { reservada: true, importacao: importacaoRecuperada };
+
+    const importacao = await ImportacaoNfce.findOne({ chave_acesso: chaveAcesso }).lean();
+    return { reservada: false, importacao };
+  }
+}
+
+async function concluirImportacaoNfce(importacaoId, compraId, processadoEm, tempoMs) {
+  if (!importacaoId) return;
+  await ImportacaoNfce.updateOne(
+    { _id: importacaoId },
+    {
+      $set: {
+        status: 'concluida',
+        compra_id: compraId,
+        processado_em: processadoEm,
+        tempo_processamento_ms: tempoMs,
+        erro: null
+      }
+    }
+  );
+}
+
+async function falharImportacaoNfce(importacaoId, err) {
+  if (!importacaoId) return;
+  await ImportacaoNfce.updateOne(
+    { _id: importacaoId },
+    {
+      $set: {
+        status: 'falhou',
+        erro: String(err && err.message ? err.message : err).slice(0, 300)
+      }
+    }
+  );
+}
+
+async function obterOuCriarEstabelecimento(dadosEstabelecimento) {
+  let estabelecimento = null;
+  const cnpj = dadosEstabelecimento.cnpj;
+
+  if (cnpj) {
+    estabelecimento = await Estabelecimento.findOne({ cnpj });
+    if (estabelecimento) return estabelecimento;
+  }
+
+  try {
+    estabelecimento = await Estabelecimento.create({
+      nome: displayFormatter.formatarNomeEstabelecimento(dadosEstabelecimento.nome) || 'Estabelecimento não identificado',
+      cnpj: cnpj || `SEM-CNPJ-${Date.now()}`,
+      endereco: displayFormatter.formatarEndereco(dadosEstabelecimento.endereco)
+    });
+    atualizarLocalizacaoEmSegundoPlano(estabelecimento._id, dadosEstabelecimento.endereco);
+    return estabelecimento;
+  } catch (err) {
+    if (erroDuplicidadeMongo(err) && cnpj) {
+      estabelecimento = await Estabelecimento.findOne({ cnpj });
+      if (estabelecimento) return estabelecimento;
+    }
+    throw err;
+  }
+}
+
 // POST /api/nfce/processar — body: { imagem_base64 } OU { url_origem } OU { html }
 // Três formas de entrada:
 //  1. imagem_base64: foto do cupom — o back-end decodifica o QR Code (jimp + qrcode-reader)
@@ -158,6 +308,11 @@ function atualizarLocalizacaoEmSegundoPlano(estabelecimentoId, endereco) {
 //  3. html: HTML da página da NFC-e já capturado
 async function processar(req, res, next) {
   const inicio = Date.now();
+  const recebidoEm = new Date(inicio);
+  let chaveAcesso = null;
+  let reservaImportacao = null;
+  let compra = null;
+
   try {
     const { html, imagem_base64 } = req.body || {};
     let { url_origem } = req.body || {};
@@ -228,34 +383,32 @@ async function processar(req, res, next) {
 
     // Chave de acesso (44 dígitos): identificador único da NFC-e.
     // Tenta o HTML; se não achar, extrai da própria URL do QR Code.
-    const chaveAcesso = dados.chave_acesso || chaveAcessoDaUrl(url_origem);
+    chaveAcesso = dados.chave_acesso || chaveAcessoDaUrl(url_origem);
 
     // Deduplicação no nível do cupom: a mesma nota não pode ser importada
     // duas vezes (evita contar o mesmo preço em dobro no histórico).
     if (chaveAcesso) {
-      const jaImportada = await Compra.findOne({ chave_acesso: chaveAcesso }).select('_id').lean();
+      const jaImportada = await buscarCompraPorChave(chaveAcesso);
       if (jaImportada) {
-        return res.status(409).json({
-          error: 'Este cupom fiscal já foi importado',
-          compra_id: jaImportada._id,
-          chave_acesso: chaveAcesso
+        return responderImportacaoExistente(res, {
+          chaveAcesso,
+          usuarioId: req.usuario.id,
+          compraExistente: jaImportada
         });
       }
+
+      const reserva = await reservarImportacaoNfce(chaveAcesso, req.usuario.id, recebidoEm);
+      if (!reserva.reservada) {
+        return responderImportacaoExistente(res, {
+          chaveAcesso,
+          usuarioId: req.usuario.id,
+          importacaoExistente: reserva.importacao
+        });
+      }
+      reservaImportacao = reserva.importacao;
     }
 
-    // Estabelecimento: busca por CNPJ; cria se não existir
-    let estabelecimento = null;
-    if (dados.estabelecimento.cnpj) {
-      estabelecimento = await Estabelecimento.findOne({ cnpj: dados.estabelecimento.cnpj });
-    }
-    if (!estabelecimento) {
-      estabelecimento = await Estabelecimento.create({
-        nome: displayFormatter.formatarNomeEstabelecimento(dados.estabelecimento.nome) || 'Estabelecimento não identificado',
-        cnpj: dados.estabelecimento.cnpj || `SEM-CNPJ-${Date.now()}`,
-        endereco: displayFormatter.formatarEndereco(dados.estabelecimento.endereco)
-      });
-      atualizarLocalizacaoEmSegundoPlano(estabelecimento._id, dados.estabelecimento.endereco);
-    }
+    const estabelecimento = await obterOuCriarEstabelecimento(dados.estabelecimento);
 
     const dataCompra = dados.data_compra || new Date();
 
@@ -284,15 +437,32 @@ async function processar(req, res, next) {
       ? dados.valor_total
       : Number(itensCompra.reduce((soma, i) => soma + i.valor_total, 0).toFixed(2));
 
-    const compra = await Compra.create({
-      usuario_id: req.usuario.id,
-      estabelecimento_id: estabelecimento._id,
-      data_compra: dataCompra,
-      valor_total: valorTotal,
-      nfce_url: url_origem,
-      chave_acesso: chaveAcesso || undefined,
-      itens: itensCompra
-    });
+    try {
+      compra = await Compra.create({
+        usuario_id: req.usuario.id,
+        estabelecimento_id: estabelecimento._id,
+        data_compra: dataCompra,
+        valor_total: valorTotal,
+        nfce_url: url_origem,
+        chave_acesso: chaveAcesso || undefined,
+        recebido_em: recebidoEm,
+        itens: itensCompra
+      });
+    } catch (err) {
+      if (erroDuplicidadeMongo(err) && chaveAcesso) {
+        const compraExistente = await buscarCompraPorChave(chaveAcesso);
+        if (compraExistente && reservaImportacao && reservaImportacao._id) {
+          const agora = new Date();
+          await concluirImportacaoNfce(reservaImportacao._id, compraExistente._id, agora, agora.getTime() - inicio);
+        }
+        return responderImportacaoExistente(res, {
+          chaveAcesso,
+          usuarioId: req.usuario.id,
+          compraExistente
+        });
+      }
+      throw err;
+    }
 
     // Atualiza histórico de preços e menor/último preço de cada produto em lote.
     await compraService.registrarPrecosEmLote(precosParaRegistrar.map(({ produto, valor }) => ({
@@ -303,7 +473,19 @@ async function processar(req, res, next) {
         data: dataCompra
     })));
 
-    const tempoMs = Date.now() - inicio;
+    const processadoEm = new Date();
+    const tempoMs = processadoEm.getTime() - inicio;
+    await Compra.updateOne(
+      { _id: compra._id },
+      {
+        $set: {
+          processado_em: processadoEm,
+          tempo_processamento_ms: tempoMs
+        }
+      }
+    );
+    await concluirImportacaoNfce(reservaImportacao && reservaImportacao._id, compra._id, processadoEm, tempoMs);
+
     if (tempoMs > 8000) {
       console.warn('[NFC-e][LENTO] tempo=%dms itens=%d url=%s', tempoMs, itensCompra.length, url_origem || '(html direto)');
     }
@@ -316,9 +498,28 @@ async function processar(req, res, next) {
       valor_total: compra.valor_total,
       itens_processados: itensCompra.length,
       itens_novos: itensNovos,
+      recebido_em: recebidoEm,
+      processado_em: processadoEm,
       tempo_ms: tempoMs
     });
   } catch (err) {
+    if (reservaImportacao && reservaImportacao._id) {
+      try {
+        if (compra && compra._id) {
+          await concluirImportacaoNfce(reservaImportacao._id, compra._id, new Date(), Date.now() - inicio);
+        } else {
+          await falharImportacaoNfce(reservaImportacao._id, err);
+        }
+      } catch (_err) {
+        // O erro original é mais importante para o diagnóstico.
+      }
+    }
+    if (erroDuplicidadeMongo(err) && chaveAcesso) {
+      return responderImportacaoExistente(res, {
+        chaveAcesso,
+        usuarioId: req.usuario.id
+      });
+    }
     return next(err);
   }
 }

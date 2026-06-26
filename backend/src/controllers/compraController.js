@@ -18,6 +18,10 @@ function formatar(compra) {
     data_compra: compra.data_compra,
     valor_total: compra.valor_total,
     nfce_url: compra.nfce_url || null,
+    chave_acesso: compra.chave_acesso || null,
+    recebido_em: compra.recebido_em || compra.criado_em || null,
+    processado_em: compra.processado_em || null,
+    tempo_processamento_ms: compra.tempo_processamento_ms || null,
     itens: compra.itens.map((i) => ({
       produto_id: i.produto_id && i.produto_id.nome ? i.produto_id._id : i.produto_id,
       produto: i.produto_id && i.produto_id.nome ? displayFormatter.formatarNomeProduto(i.produto_id) : null,
@@ -37,7 +41,7 @@ function formatar(compra) {
 async function listar(req, res, next) {
   try {
     const compras = await Compra.find({ usuario_id: req.usuario.id })
-      .sort({ data_compra: -1 })
+      .sort({ recebido_em: -1, data_compra: -1 })
       .populate('estabelecimento_id', 'nome')
       .populate('itens.produto_id', 'nome categoria tipo marca quantidade');
 

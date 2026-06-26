@@ -16,6 +16,9 @@ const compraSchema = new mongoose.Schema({
   nfce_url:           { type: String },
   chave_acesso:       { type: String }, // 44 dígitos — único por NFC-e, usado para evitar reimportação
   itens:              [itemCompraSchema],
+  recebido_em:        { type: Date, default: Date.now },
+  processado_em:      { type: Date },
+  tempo_processamento_ms: { type: Number, default: null },
   criado_em:          { type: Date, default: Date.now }
 });
 

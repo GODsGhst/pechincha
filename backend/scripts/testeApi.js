@@ -53,6 +53,21 @@ const HTML_COM_CHAVE = `
 <div class="chave">Chave de acesso 3125 0612 3456 7800 0190 6500 1000 0012 3410 0001 2345</div>
 </body></html>`;
 
+const HTML_CONCORRENTE = `
+<html><body>
+<div class="txtCenter">
+  <div class="txtTopo">MERCADO CONCORRENTE LTDA</div>
+  <div class="text">CNPJ: 55.666.777/0001-88</div>
+  <div class="text">AV TESTE, 777, CENTRO, BELO HORIZONTE, MG</div>
+</div>
+<table id="tabResult">
+  <tr><td><span class="txtTit2">MACARRAO DONA BENTA 500G</span><span class="Rqtd">Qtde.:1</span><span class="RvlUnit">Vl. Unit.: 6,00</span></td><td><span class="valor">6,00</span></td></tr>
+</table>
+<div><span class="totalNumb txtMax">6,00</span></div>
+<ul><li>Emissão: 11/06/2025 11:00:00</li></ul>
+<div class="chave">Chave de acesso 3125 0698 7654 3200 0110 6500 1000 0056 7810 0005 6789</div>
+</body></html>`;
+
 let passou = 0;
 let falhou = 0;
 
@@ -80,6 +95,7 @@ async function main() {
   const Compra = require('../src/models/Compra');
   const Produto = require('../src/models/Produto');
   const HistoricoPreco = require('../src/models/HistoricoPreco');
+  const ImportacaoNfce = require('../src/models/ImportacaoNfce');
   const compraService = require('../src/services/compraService');
   await connectDB();
 
@@ -300,6 +316,30 @@ async function main() {
   verificar(reimport.status === 409, 'reimportar o mesmo cupom retorna 409', JSON.stringify(reimport.json));
   verificar(reimport.json.compra_id === comChave.json.compra_id,
     '409 aponta para a compra já existente');
+
+  console.log('\n--- Concorrência de leitura do mesmo cupom ---');
+  const concorrentes = await Promise.all([
+    req('POST', '/nfce/processar', { html: HTML_CONCORRENTE }, token),
+    req('POST', '/nfce/processar', { html: HTML_CONCORRENTE }, token)
+  ]);
+  const criadas = concorrentes.filter((r) => r.status === 201);
+  const duplicadas = concorrentes.filter((r) => r.status === 409);
+  verificar(criadas.length === 1 && duplicadas.length === 1,
+    'duas leituras simultâneas geram 1 compra e 1 resposta de duplicado/processando',
+    JSON.stringify(concorrentes.map((r) => ({ status: r.status, json: r.json }))));
+
+  const chaveConcorrente = '31250698765432000110650010000056781000056789';
+  verificar(duplicadas[0] && duplicadas[0].json.chave_acesso === chaveConcorrente &&
+    ['processando', 'concluida'].includes(duplicadas[0].json.status_importacao),
+    'resposta concorrente informa chave e status da importação');
+
+  const comprasConcorrentes = await Compra.countDocuments({ chave_acesso: chaveConcorrente });
+  const importacoesConcorrentes = await ImportacaoNfce.countDocuments({ chave_acesso: chaveConcorrente });
+  const historicosConcorrentes = criadas[0]
+    ? await HistoricoPreco.countDocuments({ compra_id: criadas[0].json.compra_id })
+    : 0;
+  verificar(comprasConcorrentes === 1 && importacoesConcorrentes === 1 && historicosConcorrentes === 1,
+    'concorrência não duplica compra, trava de importação nem histórico de preço');
 
   console.log(`\nResultado: ${passou} verificações OK, ${falhou} falhas`);
 
