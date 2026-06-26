@@ -342,7 +342,8 @@ async function detalhar(req, res, next) {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    const produto = await Produto.findById(req.params.id);
+    const produto = await Produto.findById(req.params.id)
+      .populate('ultimo_preco.estabelecimento_id', 'nome');
     if (!produto) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
@@ -366,6 +367,15 @@ async function detalhar(req, res, next) {
       imagem_credito: imagem.credito,
       menor_preco: produto.menor_preco,
       ultimo_preco: produto.ultimo_preco ? produto.ultimo_preco.valor : null,
+      ultimo_preco_info: produto.ultimo_preco && produto.ultimo_preco.valor !== undefined && produto.ultimo_preco.valor !== null
+        ? {
+            valor: produto.ultimo_preco.valor,
+            data: produto.ultimo_preco.data,
+            estabelecimento: produto.ultimo_preco.estabelecimento_id
+              ? displayFormatter.formatarNomeEstabelecimento(produto.ultimo_preco.estabelecimento_id.nome)
+              : null
+          }
+        : null,
       estatisticas,
       historico: compactarHistoricoPreco(historico)
     });

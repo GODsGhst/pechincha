@@ -112,7 +112,7 @@ function LoginView({ onLogin }) {
               onChange={(e) => setForm((prev) => ({ ...prev, senha: e.target.value }))}
               type="password"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              minLength={6}
+              minLength={mode === 'register' ? 8 : undefined}
               required
             />
           </label>
@@ -357,6 +357,18 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
     onLogout();
   }
 
+  async function deleteAccount() {
+    if (!window.confirm('Excluir sua conta e todos os seus dados pessoais? Essa ação não pode ser desfeita.')) return;
+    setMessage('');
+    try {
+      await api.delete('/auth/me');
+      clearStoredSession();
+      onLogout();
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível excluir sua conta.');
+    }
+  }
+
   function resetFilters() {
     setQuery('');
     setCategory(null);
@@ -376,6 +388,10 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
           </div>
         </div>
         <div className="topbar-actions">
+          <button className="ghost danger" onClick={deleteAccount} type="button">
+            <Trash2 size={17} />
+            Excluir conta
+          </button>
           <button className="ghost" onClick={logout} type="button">
             <LogOut size={17} />
             Sair

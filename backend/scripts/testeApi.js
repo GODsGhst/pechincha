@@ -96,6 +96,7 @@ async function main() {
   const Produto = require('../src/models/Produto');
   const HistoricoPreco = require('../src/models/HistoricoPreco');
   const ImportacaoNfce = require('../src/models/ImportacaoNfce');
+  const ListaCompra = require('../src/models/ListaCompra');
   const compraService = require('../src/services/compraService');
   await connectDB();
 
@@ -371,6 +372,20 @@ async function main() {
     : 0;
   verificar(comprasConcorrentes === 1 && importacoesConcorrentes === 1 && historicosConcorrentes === 1,
     'concorrência não duplica compra, trava de importação nem histórico de preço');
+
+  console.log('\n--- Privacidade e exclusão de conta ---');
+  const comprasDoUsuarioAntes = await Compra.find({ usuario_id: login.json.usuario.id }).select('_id');
+  const idsComprasUsuario = comprasDoUsuarioAntes.map((c) => c._id);
+  const excluirConta = await req('DELETE', '/auth/me', null, token);
+  verificar(excluirConta.status === 200, 'usuário exclui a própria conta');
+  verificar(await Usuario.countDocuments({ email: 'joao@email.com' }) === 0,
+    'exclusão remove o usuário');
+  verificar(await Compra.countDocuments({ usuario_id: login.json.usuario.id }) === 0 &&
+    await ImportacaoNfce.countDocuments({ usuario_id: login.json.usuario.id }) === 0 &&
+    await ListaCompra.countDocuments({ usuario_id: login.json.usuario.id }) === 0,
+    'exclusão remove compras, importações e lista do usuário');
+  verificar(await HistoricoPreco.countDocuments({ compra_id: { $in: idsComprasUsuario } }) === 0,
+    'exclusão remove histórico de preço vinculado às compras do usuário');
 
   console.log(`\nResultado: ${passou} verificações OK, ${falhou} falhas`);
 

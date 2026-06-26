@@ -19,6 +19,10 @@ export default function LoginScreen() {
 
   async function enviar() {
     setErro(null);
+    if (modo === 'cadastro' && senha.length < 8) {
+      setErro('A senha precisa ter pelo menos 8 caracteres.');
+      return;
+    }
     setCarregando(true);
     try {
       if (modo === 'cadastro') await register(nome.trim(), email.trim().toLowerCase(), senha);
@@ -50,7 +54,7 @@ export default function LoginScreen() {
             <Campo icone="person-outline" placeholder="Seu nome" value={nome} onChangeText={setNome} autoCapitalize="words" />
           )}
           <Campo icone="mail-outline" placeholder="E-mail" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-          <Campo icone="lock-closed-outline" placeholder="Senha" value={senha} onChangeText={setSenha} secureTextEntry />
+          <Campo icone="lock-closed-outline" placeholder={cadastro ? 'Senha com 8+ caracteres' : 'Senha'} value={senha} onChangeText={setSenha} secureTextEntry />
 
           {erro && <Text style={styles.erro}>{erro}</Text>}
 

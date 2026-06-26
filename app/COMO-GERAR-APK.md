@@ -47,11 +47,23 @@ Neste projeto também mantemos uma cópia prática em `app/Pechincha-release.apk
 
 ### Assinatura do release
 
-O release local atual usa a assinatura debug gerada pelo projeto. Isso é aceitável
-para instalar e testar agora, mas **não é seguro para publicar ou distribuir**
-como versão final. Antes de mandar para usuários, gere uma keystore release
-privada e configure o Gradle para assinar com ela. Guarde essa keystore: sem a
-mesma chave, o Android não aceita atualizar o app instalado.
+O APK `app/Pechincha-release.apk` gerado nesta máquina está assinado com uma
+keystore release privada, não com a chave debug do Android. A chave local fica em
+`app/android/pechincha-upload-key.jks` e a configuração em
+`app/android/keystore.properties`; a pasta `app/android/` está ignorada pelo Git,
+então esses arquivos **não devem ser enviados para o repositório**.
+
+Guarde essa keystore com cuidado. Sem a mesma chave, o Android não aceita
+atualizar o app instalado. Para build em outra máquina, configure uma
+`keystore.properties` equivalente dentro de `app/android/` ou use variáveis de
+ambiente:
+
+```bash
+PECHINCHA_UPLOAD_STORE_FILE=pechincha-upload-key.jks
+PECHINCHA_UPLOAD_STORE_PASSWORD=...
+PECHINCHA_UPLOAD_KEY_ALIAS=...
+PECHINCHA_UPLOAD_KEY_PASSWORD=...
+```
 
 ---
 

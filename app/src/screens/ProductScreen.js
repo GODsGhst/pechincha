@@ -16,6 +16,7 @@ export default function ProductScreen({ route, navigation }) {
   const naLista = contem(id);
   const estatisticaGeral = produto?.estatisticas?.geral || {};
   const mediasPorLocal = produto?.estatisticas?.por_estabelecimento || [];
+  const ultimoPrecoInfo = produto?.ultimo_preco_info || null;
 
   useEffect(() => {
     (async () => {
@@ -58,6 +59,20 @@ export default function ProductScreen({ route, navigation }) {
           <View style={styles.bannerPreco}>
             <Text style={styles.bannerLabel}>melhor preço encontrado</Text>
             <Text style={styles.bannerValor}>{formatBRL(produto.menor_preco)}</Text>
+          </View>
+
+          <View style={styles.confiancaBox}>
+            <View style={styles.confiancaIcone}>
+              <Ionicons name="receipt-outline" size={18} color={colors.brandDark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.confiancaTitulo}>Preço vindo de cupom fiscal</Text>
+              <Text style={styles.confiancaTexto}>
+                {ultimoPrecoInfo
+                  ? `Último registro: ${formatBRL(ultimoPrecoInfo.valor)}${ultimoPrecoInfo.estabelecimento ? ` em ${ultimoPrecoInfo.estabelecimento}` : ''}${ultimoPrecoInfo.data ? ` · ${tempoRelativo(ultimoPrecoInfo.data)}` : ''}.`
+                  : 'Ainda sem último registro detalhado para este produto.'}
+              </Text>
+            </View>
           </View>
 
           {estatisticaGeral.registros > 0 && (
@@ -147,6 +162,10 @@ const styles = StyleSheet.create({
   bannerPreco: { backgroundColor: colors.brandDark, borderRadius: radius.lg, padding: 16, marginTop: 12 },
   bannerLabel: { fontFamily: fonts.body, fontSize: 11, color: '#9FD9BC' },
   bannerValor: { fontFamily: fonts.monoMedium, fontSize: 28, color: colors.white, marginTop: 2 },
+  confiancaBox: { flexDirection: 'row', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 12, marginTop: 12 },
+  confiancaIcone: { width: 36, height: 36, borderRadius: radius.md, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
+  confiancaTitulo: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },
+  confiancaTexto: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkSoft, lineHeight: 18, marginTop: 2 },
   statsBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 12, marginTop: 12 },
   statPrincipal: { borderBottomWidth: 1, borderBottomColor: colors.line, paddingBottom: 10, marginBottom: 10 },
   statLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted },

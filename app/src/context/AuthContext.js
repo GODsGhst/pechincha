@@ -55,8 +55,13 @@ export function AuthProvider({ children }) {
     setUsuario(null);
   }
 
+  async function excluirConta() {
+    await api.delete('/auth/me');
+    await logout();
+  }
+
   return (
-    <AuthContext.Provider value={{ usuario, carregando, login, register, logout }}>
+    <AuthContext.Provider value={{ usuario, carregando, login, register, logout, excluirConta }}>
       {children}
     </AuthContext.Provider>
   );

@@ -3,7 +3,7 @@
 // backend já mantém em /estabelecimentos/mapa.
 
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Linking, Platform, ScrollView, View, Text, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
@@ -171,8 +171,10 @@ export default function AreaScreen({ navigation }) {
   const [endereco, setEndereco] = useState(null);
   const [estabelecimentos, setEstabelecimentos] = useState([]);
   const [carregandoGps, setCarregandoGps] = useState(false);
+  const [carregandoBuscaLocal, setCarregandoBuscaLocal] = useState(false);
   const [carregandoLojas, setCarregandoLojas] = useState(false);
   const [erro, setErro] = useState(null);
+  const [buscaLocal, setBuscaLocal] = useState('');
 
   const lojasComCoordenadas = useMemo(
     () => estabelecimentos.filter((loja) => loja.localizacao),
@@ -197,7 +199,7 @@ export default function AreaScreen({ navigation }) {
   const lojasNoMapa = localizacao ? lojasComDistancia : lojasComCoordenadas;
   const mapaHtml = useMemo(
     () => htmlMapa({ localizacao, lojas: lojasNoMapa, distancia }),
-    [localizacao, lojasComCoordenadas, distancia]
+    [localizacao, lojasNoMapa, distancia]
   );
 
   async function buscarLojas() {
@@ -264,12 +266,21 @@ export default function AreaScreen({ navigation }) {
 
   function aplicarPosicao(pos, origem) {
     if (!pos?.coords) return;
-    const coords = {
+    aplicarCoordenadas({
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
+      precisao: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null
+    }, origem);
+  }
+
+  function aplicarCoordenadas(origemCoords, origem) {
+    if (!Number.isFinite(origemCoords?.lat) || !Number.isFinite(origemCoords?.lng)) return;
+    const coords = {
+      lat: Number(origemCoords.lat),
+      lng: Number(origemCoords.lng),
     };
     setLocalizacao(coords);
-    setPrecisao(Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null);
+    setPrecisao(Number.isFinite(origemCoords.precisao) ? origemCoords.precisao : null);
     setOrigemGps(origem);
 
     Location.reverseGeocodeAsync({
@@ -278,6 +289,30 @@ export default function AreaScreen({ navigation }) {
     })
       .then(([geo]) => setEndereco(geo || null))
       .catch(() => setEndereco(null));
+  }
+
+  async function buscarLocalDigitado() {
+    const termo = buscaLocal.trim();
+    if (termo.length < 3) {
+      setErro('Digite cidade, bairro ou CEP para buscar.');
+      return;
+    }
+
+    setCarregandoBuscaLocal(true);
+    setErro(null);
+    try {
+      const resultados = await Location.geocodeAsync(termo);
+      const primeiro = resultados && resultados[0];
+      if (!primeiro) {
+        setErro('Não encontrei esse local. Tente incluir cidade e estado.');
+        return;
+      }
+      aplicarCoordenadas({ lat: primeiro.latitude, lng: primeiro.longitude, precisao: null }, 'manual');
+    } catch (_e) {
+      setErro('Não consegui buscar esse local agora.');
+    } finally {
+      setCarregandoBuscaLocal(false);
+    }
   }
 
   async function abrirRota(loja) {
@@ -321,7 +356,7 @@ export default function AreaScreen({ navigation }) {
 
   const complementoLocal = localizacao
     ? [
-        origemGps === 'ultima' ? 'Última localização conhecida' : 'GPS ativo',
+        origemGps === 'ultima' ? 'Última localização conhecida' : origemGps === 'manual' ? 'Local digitado' : 'GPS ativo',
         precisao ? `precisão ~${Math.round(precisao)} m` : null
       ].filter(Boolean).join(' · ')
     : 'Toque em usar atual';
@@ -367,6 +402,26 @@ export default function AreaScreen({ navigation }) {
                 <Ionicons name="refresh" size={16} color={colors.white} />
                 <Text style={styles.botaoGTexto}>Atualizar lojas</Text>
               </>
+            )}
+          </Pressable>
+        </View>
+
+        <View style={styles.buscaManual}>
+          <Ionicons name="search" size={17} color={colors.inkMuted} />
+          <TextInput
+            style={styles.buscaManualInput}
+            value={buscaLocal}
+            onChangeText={setBuscaLocal}
+            placeholder="Cidade, bairro ou CEP"
+            placeholderTextColor={colors.inkMuted}
+            returnKeyType="search"
+            onSubmitEditing={buscarLocalDigitado}
+          />
+          <Pressable style={styles.buscaManualBotao} onPress={buscarLocalDigitado} disabled={carregandoBuscaLocal}>
+            {carregandoBuscaLocal ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Ionicons name="arrow-forward" size={17} color={colors.white} />
             )}
           </Pressable>
         </View>
@@ -485,6 +540,9 @@ const styles = StyleSheet.create({
   botaoOTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.inkSoft },
   botaoG: { flex: 1, height: 46, borderRadius: radius.md, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
   botaoGTexto: { fontFamily: fonts.semibold, fontSize: 13, color: colors.white },
+  buscaManual: { height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 12, paddingRight: 6, marginTop: 10 },
+  buscaManualInput: { flex: 1, height: 46, fontFamily: fonts.body, fontSize: 13, color: colors.ink, paddingVertical: 0 },
+  buscaManualBotao: { width: 36, height: 36, borderRadius: radius.sm, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center' },
   erroBox: { flexDirection: 'row', gap: 8, backgroundColor: '#FFF3EC', borderWidth: 1, borderColor: '#F0C6B4', borderRadius: radius.md, padding: 10, marginTop: 10 },
   erroTexto: { flex: 1, fontFamily: fonts.body, fontSize: 12.5, color: colors.inkSoft, lineHeight: 18 },
   chips: { flexDirection: 'row', gap: 10, marginTop: 10 },

@@ -188,6 +188,12 @@ select:focus {
   padding: 0 12px;
 }
 
+.ghost.danger {
+  color: #a04320;
+  border-color: #ffd4c4;
+  background: #fff7f2;
+}
+
 .ghost.ok {
   background: #e7f4eb;
   border-color: #b9dec3;

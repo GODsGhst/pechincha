@@ -1,6 +1,10 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Usuario = require('../models/Usuario');
+const Compra = require('../models/Compra');
+const ImportacaoNfce = require('../models/ImportacaoNfce');
+const ListaCompra = require('../models/ListaCompra');
+const compraService = require('../services/compraService');
 
 const SALT_ROUNDS = 10;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -81,4 +85,39 @@ async function login(req, res, next) {
   }
 }
 
-module.exports = { register, login };
+async function removerConta(req, res, next) {
+  try {
+    const usuario = await Usuario.findById(req.usuario.id).select('papel');
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    if (usuario.papel === 'admin') {
+      const outrosAdmins = await Usuario.countDocuments({
+        _id: { $ne: usuario._id },
+        papel: 'admin'
+      });
+      if (outrosAdmins === 0) {
+        return res.status(400).json({ error: 'Não é possível excluir o último administrador' });
+      }
+    }
+
+    const compras = await Compra.find({ usuario_id: usuario._id });
+    for (const compra of compras) {
+      await compraService.removerHistoricoDaCompra(compra);
+    }
+
+    await Promise.all([
+      Compra.deleteMany({ usuario_id: usuario._id }),
+      ImportacaoNfce.deleteMany({ usuario_id: usuario._id }),
+      ListaCompra.deleteMany({ usuario_id: usuario._id }),
+      Usuario.deleteOne({ _id: usuario._id })
+    ]);
+
+    return res.json({ message: 'Conta e dados pessoais removidos' });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { register, login, removerConta };
