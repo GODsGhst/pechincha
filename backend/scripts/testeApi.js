@@ -134,6 +134,19 @@ async function main() {
   verificar(corsBloqueado.status === 200 && !corsBloqueado.headers.get('access-control-allow-origin'),
     'CORS não libera origem desconhecida');
 
+  const metodoBloqueado = await req('PATCH', '/auth/login', {});
+  verificar(metodoBloqueado.status === 405, 'API bloqueia método HTTP não permitido');
+
+  const contentTypeRuim = await fetch(base + '/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: 'email=x'
+  });
+  verificar(contentTypeRuim.status === 415, 'API exige JSON em requisições com corpo');
+
+  const queryGrande = await req('GET', `/produtos?nome=${'a'.repeat(221)}`);
+  verificar(queryGrande.status === 400, 'API bloqueia parâmetro de consulta muito longo');
+
   const reg = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: 'senha123' });
   verificar(reg.status === 201 && !!reg.json.token, 'register retorna 201 + token');
   verificar(reg.json.usuario.papel === 'usuario', 'register retorna papel usuario');
@@ -143,6 +156,31 @@ async function main() {
 
   const regDup = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: 'senha123' });
   verificar(regDup.status === 409, 'register duplicado retorna 409');
+
+  const recReg = await req('POST', '/auth/register', { nome: 'Recupera Senha', email: 'recupera@email.com', senha: 'senha123' });
+  verificar(recReg.status === 201, 'cria usuário para fluxo de recuperação de senha');
+
+  const forgot = await req('POST', '/auth/forgot-password', { email: 'recupera@email.com' });
+  verificar(forgot.status === 200 && /^[a-f0-9]{64}$/i.test(forgot.json.reset_token_dev || ''),
+    'forgot-password gera token temporário em desenvolvimento');
+
+  const resetInvalido = await req('POST', '/auth/reset-password', {
+    email: 'recupera@email.com',
+    token: '0'.repeat(64),
+    senha: 'novaSenha123'
+  });
+  verificar(resetInvalido.status === 400, 'reset-password rejeita token inválido');
+
+  const resetOk = await req('POST', '/auth/reset-password', {
+    email: 'recupera@email.com',
+    token: forgot.json.reset_token_dev,
+    senha: 'novaSenha123'
+  });
+  verificar(resetOk.status === 200, 'reset-password aceita token válido e troca senha');
+
+  const loginSenhaNova = await req('POST', '/auth/login', { email: 'recupera@email.com', senha: 'novaSenha123' });
+  verificar(loginSenhaNova.status === 200 && !!loginSenhaNova.json.token,
+    'login funciona com a senha redefinida');
 
   const login = await req('POST', '/auth/login', { email: 'joao@email.com', senha: 'senha123' });
   verificar(login.status === 200 && !!login.json.token, 'login retorna 200 + token');
@@ -155,6 +193,11 @@ async function main() {
 
   const loginErrado = await req('POST', '/auth/login', { email: 'joao@email.com', senha: 'errada' });
   verificar(loginErrado.status === 401, 'login com senha errada retorna 401');
+  let loginBloqueado = loginErrado;
+  for (let i = 0; i < 4; i += 1) {
+    loginBloqueado = await req('POST', '/auth/login', { email: 'joao@email.com', senha: `errada-${i}` });
+  }
+  verificar(loginBloqueado.status === 429, 'login bloqueia conta após tentativas repetidas de senha');
 
   const produtoDireto = await req('POST', '/produtos', { nome: 'PRODUTO DIRETO 1UN' }, token);
   verificar(produtoDireto.status === 403, 'usuário comum não cria produto direto');

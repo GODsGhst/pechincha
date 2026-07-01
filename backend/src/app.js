@@ -11,6 +11,7 @@ const comparacaoRoutes = require('./routes/comparacaoRoutes');
 const listaRoutes = require('./routes/listaRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const rateLimit = require('./middleware/rateLimitMiddleware');
+const requestHardening = require('./middleware/securityMiddleware');
 
 const app = express();
 
@@ -70,6 +71,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.use('/api', requestHardening);
 const jsonPadrao = express.json({ limit: '1mb' });
 const jsonNfce = express.json({ limit: '15mb' });
 

@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 
 function authMiddleware(req, res, next) {
   const header = req.headers.authorization || '';
@@ -10,7 +11,13 @@ function authMiddleware(req, res, next) {
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.usuario = { id: payload.id };
+    if (!payload || !payload.id || !mongoose.Types.ObjectId.isValid(payload.id)) {
+      return res.status(401).json({ error: 'Token inválido ou expirado' });
+    }
+    req.usuario = {
+      id: payload.id,
+      papel: payload.papel === 'admin' ? 'admin' : 'usuario'
+    };
     return next();
   } catch (_err) {
     return res.status(401).json({ error: 'Token inválido ou expirado' });

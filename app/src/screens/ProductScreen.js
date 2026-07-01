@@ -71,6 +71,7 @@ export default function ProductScreen({ route, navigation }) {
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
   const [aba, setAba] = useState('locais');
+  const [offlineCache, setOfflineCache] = useState(false);
   const naLista = contem(id);
   const estatisticaGeral = produto?.estatisticas?.geral || {};
   const mediasPorLocal = produto?.estatisticas?.por_estabelecimento || [];
@@ -81,12 +82,15 @@ export default function ProductScreen({ route, navigation }) {
   async function carregarProduto(manual = false) {
     if (manual) setAtualizando(true);
     try {
-      setProduto(await api.get(`/produtos/${id}`, {
+      const resposta = await api.get(`/produtos/${id}`, {
         cacheMs: 30000,
         forceRefresh: manual
-      }));
+      });
+      setProduto(resposta);
+      setOfflineCache(Boolean(resposta._meta?.offline));
     } catch (_e) {
       setProduto(null);
+      setOfflineCache(false);
     } finally {
       setCarregando(false);
       if (manual) setAtualizando(false);
@@ -117,6 +121,12 @@ export default function ProductScreen({ route, navigation }) {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={atualizando} onRefresh={() => carregarProduto(true)} tintColor={colors.brand} />}
         >
+          {offlineCache && (
+            <View style={styles.offlineBox}>
+              <Ionicons name="cloud-offline-outline" size={18} color={colors.brandDark} />
+              <Text style={styles.offlineTexto}>Detalhe carregado dos últimos preços salvos.</Text>
+            </View>
+          )}
           <ProductImage uri={produto.imagem_url} style={styles.imagem} iconName="pricetag" iconSize={48} />
           <Text style={styles.nome}>{produto.nome}</Text>
           <View style={styles.metaLinha}>
@@ -256,6 +266,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8 },
   iconeVoltar: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitulo: { fontFamily: fonts.semibold, fontSize: 16, color: colors.brandDark },
+  offlineBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, borderRadius: radius.md, padding: 10, marginBottom: 12 },
+  offlineTexto: { flex: 1, fontFamily: fonts.medium, fontSize: 12, color: colors.brandDark },
   imagem: { height: 150, borderRadius: radius.lg, backgroundColor: '#F1F0EA', alignItems: 'center', justifyContent: 'center' },
   nome: { fontFamily: fonts.display, fontSize: 18, color: colors.ink, marginTop: 14 },
   metaLinha: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },

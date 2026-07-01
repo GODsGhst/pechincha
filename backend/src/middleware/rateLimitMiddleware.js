@@ -27,7 +27,8 @@ function rateLimit({
     const agora = Date.now();
     limparAntigos(agora);
 
-    const chave = keyGenerator ? keyGenerator(req) : `${nome}:${ipDaRequisicao(req)}`;
+    const chaveCustomizada = keyGenerator ? keyGenerator(req) : null;
+    const chave = chaveCustomizada || `${nome}:${ipDaRequisicao(req)}`;
     const bucket = buckets.get(chave) || { count: 0, resetAt: agora + janelaMs };
 
     if (bucket.resetAt <= agora) {

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Alert, View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -7,6 +7,7 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { colors, fonts, radius } from '../theme';
 import { formatBRL } from '../utils/format';
+import { carregarBuscasRecentes } from '../utils/recentSearches';
 
 function iniciais(nome) {
   if (!nome) return '?';
@@ -27,24 +28,49 @@ export default function ProfileScreen({ navigation }) {
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
+  const [offlineCache, setOfflineCache] = useState(false);
+  const [buscasRecentes, setBuscasRecentes] = useState([]);
+
+  const maisComprados = useMemo(() => {
+    const porProduto = new Map();
+    for (const compra of compras) {
+      for (const item of compra.itens || []) {
+        const nome = item.produto || item.nome_original;
+        if (!nome) continue;
+        const chave = item.produto_id || nome;
+        const atual = porProduto.get(chave) || { nome, quantidade: 0, total: 0 };
+        atual.quantidade += Number(item.quantidade) || 0;
+        atual.total += Number(item.valor_total) || 0;
+        porProduto.set(chave, atual);
+      }
+    }
+    return [...porProduto.values()]
+      .sort((a, b) => b.quantidade - a.quantidade || b.total - a.total)
+      .slice(0, 4);
+  }, [compras]);
 
   const carregar = useCallback(async (manual = false) => {
     if (manual) setAtualizando(true);
     try {
-      const { compras: c } = await api.get('/compras', {
+      const resposta = await api.get('/compras', {
         cacheMs: 30000,
         forceRefresh: manual
       });
-      setCompras(c || []);
+      setCompras(resposta.compras || []);
+      setOfflineCache(Boolean(resposta._meta?.offline));
     } catch (_e) {
       setCompras([]);
+      setOfflineCache(false);
     } finally {
       setCarregando(false);
       if (manual) setAtualizando(false);
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { carregar(); }, [carregar]));
+  useFocusEffect(useCallback(() => {
+    carregar();
+    carregarBuscasRecentes().then(setBuscasRecentes);
+  }, [carregar]));
 
   function confirmarExclusao() {
     Alert.alert(
@@ -110,6 +136,13 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.colabNumero}>{carregando ? '—' : compras.length}</Text>
       </View>
 
+      {offlineCache && (
+        <View style={styles.offlineBox}>
+          <Ionicons name="cloud-offline-outline" size={18} color={colors.brandDark} />
+          <Text style={styles.offlineTexto}>Mostrando histórico salvo neste aparelho.</Text>
+        </View>
+      )}
+
       <View style={styles.privacidadeCard}>
         <View style={styles.privacidadeIcone}>
           <Ionicons name="shield-checkmark-outline" size={20} color={colors.brandDark} />
@@ -121,6 +154,32 @@ export default function ProfileScreen({ navigation }) {
       </View>
 
       <Text style={styles.secao}>Seu histórico</Text>
+
+      {maisComprados.length > 0 && (
+        <View style={styles.insightsBox}>
+          <Text style={styles.insightsTitulo}>Mais comprados</Text>
+          {maisComprados.map((item) => (
+            <View key={item.nome} style={styles.insightLinha}>
+              <Text style={styles.insightNome} numberOfLines={1}>{item.nome}</Text>
+              <Text style={styles.insightValor}>{item.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}x</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {buscasRecentes.length > 0 && (
+        <View style={styles.insightsBox}>
+          <Text style={styles.insightsTitulo}>Pesquisados recentemente</Text>
+          <View style={styles.buscasWrap}>
+            {buscasRecentes.map((item) => (
+              <View key={item} style={styles.buscaChip}>
+                <Ionicons name="search" size={13} color={colors.brandDark} />
+                <Text style={styles.buscaChipTexto} numberOfLines={1}>{item}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
 
       {carregando ? (
         <ActivityIndicator color={colors.brand} style={{ marginTop: 24 }} />
@@ -173,11 +232,21 @@ const styles = StyleSheet.create({
   colabLabel: { fontFamily: fonts.semibold, fontSize: 14, color: colors.white },
   colabTexto: { fontFamily: fonts.body, fontSize: 12, color: '#9FD9BC', marginTop: 2, maxWidth: 200 },
   colabNumero: { fontFamily: fonts.display, fontSize: 36, color: '#5FD698' },
+  offlineBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, borderRadius: radius.md, padding: 10, marginTop: 12 },
+  offlineTexto: { flex: 1, fontFamily: fonts.medium, fontSize: 12, color: colors.brandDark },
   privacidadeCard: { flexDirection: 'row', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 14, marginTop: 12 },
   privacidadeIcone: { width: 38, height: 38, borderRadius: radius.md, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   privacidadeTitulo: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
   privacidadeTexto: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkSoft, lineHeight: 18, marginTop: 2 },
   secao: { fontFamily: fonts.display, fontSize: 16, color: colors.ink, marginTop: 24, marginBottom: 10 },
+  insightsBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 12, marginBottom: 10 },
+  insightsTitulo: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink, marginBottom: 8 },
+  insightLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 5 },
+  insightNome: { flex: 1, fontFamily: fonts.body, fontSize: 12.5, color: colors.inkSoft },
+  insightValor: { fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.brandDark },
+  buscasWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  buscaChip: { maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: radius.pill, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, paddingHorizontal: 10, paddingVertical: 6 },
+  buscaChipTexto: { fontFamily: fonts.medium, fontSize: 12, color: colors.brandDark },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 12, marginBottom: 8 },
   rowIcone: { width: 38, height: 38, borderRadius: radius.sm, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   rowLocal: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },

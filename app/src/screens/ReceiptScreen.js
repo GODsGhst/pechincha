@@ -27,13 +27,17 @@ export default function ReceiptScreen({ route, navigation }) {
   const { id } = route.params;
   const [compra, setCompra] = useState(null);
   const [carregando, setCarregando] = useState(true);
+  const [offlineCache, setOfflineCache] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        setCompra(await api.get(`/compras/${id}`));
+        const resposta = await api.get(`/compras/${id}`, { cacheMs: 24 * 60 * 60 * 1000 });
+        setCompra(resposta);
+        setOfflineCache(Boolean(resposta._meta?.offline));
       } catch (_e) {
         setCompra(null);
+        setOfflineCache(false);
       } finally {
         setCarregando(false);
       }
@@ -56,6 +60,12 @@ export default function ReceiptScreen({ route, navigation }) {
         <Text style={styles.vazio}>Não foi possível carregar esta compra.</Text>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
+          {offlineCache && (
+            <View style={styles.offlineBox}>
+              <Ionicons name="cloud-offline-outline" size={18} color={colors.brandDark} />
+              <Text style={styles.offlineTexto}>Notinha carregada do histórico salvo.</Text>
+            </View>
+          )}
           <View style={styles.resumo}>
             <View style={styles.resumoIcone}>
               <Ionicons name="receipt" size={24} color={colors.brandDark} />
@@ -104,6 +114,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8 },
   iconeVoltar: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitulo: { fontFamily: fonts.semibold, fontSize: 16, color: colors.brandDark },
+  offlineBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, borderRadius: radius.md, padding: 10, marginBottom: 12 },
+  offlineTexto: { flex: 1, fontFamily: fonts.medium, fontSize: 12, color: colors.brandDark },
   resumo: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 14 },
   resumoIcone: { width: 46, height: 46, borderRadius: radius.md, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   local: { fontFamily: fonts.display, fontSize: 16, color: colors.ink },

@@ -37,6 +37,8 @@ npm start
 | `JWT_SECRET` | Chave de assinatura dos tokens | — (obrigatória) |
 | `JWT_EXPIRES_IN` | Expiração do token | `7d` |
 | `CORS_ORIGIN` | Origens permitidas em produção (separadas por vírgula) | todas |
+| `PASSWORD_RESET_BASE_URL` | URL usada para montar link de redefinição de senha | — |
+| `PASSWORD_RESET_EXPOSE_TOKEN` | Expor token de reset no JSON (somente dev/teste) | `false` |
 
 > Para não perder notas ao reiniciar, use `npm run dev:persist` ou configure um
 > `MONGODB_URI` real e rode `npm run dev`. O comando `npm run dev:demo` é
@@ -49,6 +51,14 @@ npm start
 |---|---|---|
 | POST | `/api/auth/register` | Não |
 | POST | `/api/auth/login` | Não |
+| POST | `/api/auth/forgot-password` | Não |
+| POST | `/api/auth/reset-password` | Não |
+
+O login tem limite por IP, limite por e-mail e bloqueio temporário da conta
+após tentativas repetidas de senha. A recuperação de senha salva apenas o hash
+do token temporário no banco. Em desenvolvimento/teste o token pode voltar no
+JSON para facilitar a apresentação; em produção não exponha esse token e
+entregue-o por e-mail ou outro canal verificado.
 
 ### NFC-e
 | Método | Rota | Auth |

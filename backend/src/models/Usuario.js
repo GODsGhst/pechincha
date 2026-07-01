@@ -5,7 +5,19 @@ const usuarioSchema = new mongoose.Schema({
   email:     { type: String, required: true, unique: true, lowercase: true, trim: true },
   senha:     { type: String, required: true, select: false }, // armazenada com bcrypt
   papel:     { type: String, enum: ['usuario', 'admin'], default: 'usuario' },
+  login: {
+    tentativas_falhas: { type: Number, default: 0, select: false },
+    bloqueado_ate:    { type: Date, default: null, select: false },
+    ultimo_falha_em:  { type: Date, default: null, select: false }
+  },
+  reset_senha: {
+    token_hash:    { type: String, default: null, select: false },
+    expira_em:     { type: Date, default: null, select: false },
+    solicitado_em: { type: Date, default: null, select: false }
+  },
   criado_em: { type: Date, default: Date.now }
 });
+
+usuarioSchema.index({ 'reset_senha.expira_em': 1 }, { sparse: true });
 
 module.exports = mongoose.model('Usuario', usuarioSchema);

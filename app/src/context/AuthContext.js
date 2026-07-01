@@ -4,7 +4,8 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { api, setAuthToken } from '../api/client';
+import { api, limparCachePrivadoPersistente, setAuthToken, setCacheOwner } from '../api/client';
+import { limparBuscasRecentes } from '../utils/recentSearches';
 
 const TOKEN_KEY = 'pechincha.token';
 const AuthContext = createContext(null);
@@ -21,19 +22,26 @@ export function AuthProvider({ children }) {
         if (token) {
           setAuthToken(token);
           const dados = await SecureStore.getItemAsync('pechincha.usuario');
-          if (dados) setUsuario(JSON.parse(dados));
+          if (dados) {
+            const usuarioSalvo = JSON.parse(dados);
+            setCacheOwner(usuarioSalvo?.id);
+            setUsuario(usuarioSalvo);
+          }
 
           try {
             const { usuario: usuarioAtual } = await api.get('/auth/me');
             if (usuarioAtual) {
               await SecureStore.setItemAsync('pechincha.usuario', JSON.stringify(usuarioAtual));
+              setCacheOwner(usuarioAtual.id);
               setUsuario(usuarioAtual);
             }
-          } catch (_erroSessao) {
-            setAuthToken(null);
-            await SecureStore.deleteItemAsync(TOKEN_KEY);
-            await SecureStore.deleteItemAsync('pechincha.usuario');
-            setUsuario(null);
+          } catch (erroSessao) {
+            if (erroSessao?.status === 401 || erroSessao?.status === 403) {
+              setAuthToken(null);
+              await SecureStore.deleteItemAsync(TOKEN_KEY);
+              await SecureStore.deleteItemAsync('pechincha.usuario');
+              setUsuario(null);
+            }
           }
         }
       } catch (_e) {
@@ -46,6 +54,7 @@ export function AuthProvider({ children }) {
 
   async function persistirSessao(token, dadosUsuario) {
     setAuthToken(token);
+    setCacheOwner(dadosUsuario?.id);
     await SecureStore.setItemAsync(TOKEN_KEY, token);
     await SecureStore.setItemAsync('pechincha.usuario', JSON.stringify(dadosUsuario));
     setUsuario(dadosUsuario);
@@ -61,10 +70,21 @@ export function AuthProvider({ children }) {
     await persistirSessao(token, u);
   }
 
+  async function solicitarResetSenha(email) {
+    return api.post('/auth/forgot-password', { email });
+  }
+
+  async function redefinirSenha(email, token, senha) {
+    return api.post('/auth/reset-password', { email, token, senha });
+  }
+
   async function logout() {
+    limparCachePrivadoPersistente();
+    setCacheOwner(null);
     setAuthToken(null);
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     await SecureStore.deleteItemAsync('pechincha.usuario');
+    await limparBuscasRecentes();
     setUsuario(null);
   }
 
@@ -74,7 +94,16 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ usuario, carregando, login, register, logout, excluirConta }}>
+    <AuthContext.Provider value={{
+      usuario,
+      carregando,
+      login,
+      register,
+      solicitarResetSenha,
+      redefinirSenha,
+      logout,
+      excluirConta
+    }}>
       {children}
     </AuthContext.Provider>
   );

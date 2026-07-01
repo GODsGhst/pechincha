@@ -25,17 +25,20 @@ export default function HomeScreen({ navigation }) {
   const [itens, setItens] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
+  const [offlineCache, setOfflineCache] = useState(false);
 
   const carregar = useCallback(async (manual = false) => {
     if (manual) setAtualizando(true);
     try {
-      const { menores_precos } = await api.get('/produtos/menores?limite=6', {
+      const resposta = await api.get('/produtos/menores?limite=6', {
         cacheMs: 30000,
         forceRefresh: manual
       });
-      setItens(menores_precos || []);
+      setItens(resposta.menores_precos || []);
+      setOfflineCache(Boolean(resposta._meta?.offline));
     } catch (_e) {
       setItens([]);
+      setOfflineCache(false);
     } finally {
       setCarregando(false);
       if (manual) setAtualizando(false);
@@ -75,6 +78,13 @@ export default function HomeScreen({ navigation }) {
             Olá, {usuario?.nome?.split(' ')[0] || 'bem-vindo'}! Escaneie um cupom e <Text style={{ color: colors.brand, fontFamily: fonts.semibold }}>colabore</Text> com a comunidade.
           </Text>
         </View>
+
+        {offlineCache && (
+          <View style={styles.offlineBox}>
+            <Ionicons name="cloud-offline-outline" size={18} color={colors.brandDark} />
+            <Text style={styles.offlineTexto}>Mostrando últimos preços salvos no aparelho.</Text>
+          </View>
+        )}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 18 }} contentContainerStyle={{ gap: 12, paddingRight: 2 }}>
           {CATEGORIAS.map((c) => (
@@ -136,6 +146,8 @@ const styles = StyleSheet.create({
   buscaTexto: { fontFamily: fonts.body, fontSize: 14, color: colors.inkMuted },
   comunidade: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 14 },
   comunidadeTexto: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, lineHeight: 19 },
+  offlineBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, borderRadius: radius.md, padding: 10, marginTop: 12 },
+  offlineTexto: { flex: 1, fontFamily: fonts.medium, fontSize: 12, color: colors.brandDark },
   categoria: { alignItems: 'center', gap: 6, width: 64 },
   categoriaIcone: { width: 52, height: 52, borderRadius: radius.lg, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   categoriaNome: { fontFamily: fonts.medium, fontSize: 11, color: colors.inkSoft },

@@ -96,6 +96,7 @@ export default function SearchScreen({ route, navigation }) {
   const [buscou, setBuscou] = useState(false);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [buscasRecentes, setBuscasRecentes] = useState([]);
+  const [offlineCache, setOfflineCache] = useState(false);
   const debounce = useRef(null);
   const requisicaoBusca = useRef(0);
   const requisicaoFiltros = useRef(0);
@@ -166,18 +167,20 @@ export default function SearchScreen({ route, navigation }) {
       setSugestoes([]);
       setBuscou(false);
       setCarregando(false);
+      setOfflineCache(false);
       return;
     }
 
     setCarregando(true);
     try {
       const query = montarQuery({ termo: termoLimpo, categoria, tipo, marca, quantidade });
-      const { produtos } = await api.get(`/produtos${query}`, { timeoutMs: 20000, cacheMs: 30000 });
+      const resposta = await api.get(`/produtos${query}`, { timeoutMs: 20000, cacheMs: 30000 });
       if (seq !== requisicaoBusca.current) return;
 
-      const lista = produtos || [];
+      const lista = resposta.produtos || [];
       setResultados(lista);
       setSugestoes(termoLimpo.length >= 2 ? lista.slice(0, 8) : []);
+      setOfflineCache(Boolean(resposta._meta?.offline));
       if (termoLimpo.length >= 2 && lista.length > 0) {
         salvarBuscaRecente(termoLimpo).then(setBuscasRecentes);
       }
@@ -185,6 +188,7 @@ export default function SearchScreen({ route, navigation }) {
       if (seq === requisicaoBusca.current) {
         setResultados([]);
         setSugestoes([]);
+        setOfflineCache(false);
       }
     } finally {
       if (seq === requisicaoBusca.current) {
@@ -348,6 +352,13 @@ export default function SearchScreen({ route, navigation }) {
         </View>
       )}
 
+      {offlineCache && (
+        <View style={styles.offlineBox}>
+          <Ionicons name="cloud-offline-outline" size={17} color={colors.brandDark} />
+          <Text style={styles.offlineTexto}>Resultados dos últimos preços salvos.</Text>
+        </View>
+      )}
+
       {carregando ? (
         <LoadingCards pulse={pulse} />
       ) : (
@@ -437,6 +448,8 @@ const styles = StyleSheet.create({
   recentesLista: { paddingHorizontal: 16, gap: 8 },
   recenteChip: { maxWidth: 180, height: 34, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, paddingHorizontal: 12 },
   recenteTexto: { fontFamily: fonts.medium, fontSize: 12, color: colors.brandDark },
+  offlineBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 9, marginHorizontal: 16, marginTop: 8 },
+  offlineTexto: { flex: 1, fontFamily: fonts.medium, fontSize: 12, color: colors.brandDark },
   sugestoesTitulo: { fontFamily: fonts.medium, fontSize: 12, color: colors.inkMuted, paddingHorizontal: 16, marginBottom: 8 },
   sugestoes: { paddingHorizontal: 16, gap: 8 },
   sugestao: { width: 230, minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.md, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, paddingHorizontal: 10, paddingVertical: 8 },
