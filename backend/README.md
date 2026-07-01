@@ -39,6 +39,8 @@ npm start
 | `CORS_ORIGIN` | Origens permitidas (separadas por vírgula). Em produção, só URLs HTTPS explícitas | lista local/dev |
 | `PASSWORD_RESET_BASE_URL` | URL usada para montar link de redefinição de senha. Em produção, deve ser HTTPS | — |
 | `PASSWORD_RESET_EXPOSE_TOKEN` | Expor token de reset no JSON (somente dev/teste; bloqueado em produção) | `true` em dev |
+| `EMAIL_VERIFICATION_BASE_URL` | URL usada para montar link de confirmação de e-mail. Em produção, deve ser HTTPS | `PASSWORD_RESET_BASE_URL` |
+| `EMAIL_VERIFICATION_EXPOSE_TOKEN` | Expor token de confirmação no JSON (somente dev/teste; bloqueado em produção) | `true` em dev |
 | `SMTP_HOST` | Host SMTP para enviar e-mail de recuperação | — |
 | `SMTP_PORT` | Porta SMTP | `587` |
 | `SMTP_SECURE` | `true` para SMTP com TLS direto | `false` |
@@ -65,14 +67,25 @@ O deploy usa essa rota para health check.
 |---|---|---|
 | POST | `/api/auth/register` | Não |
 | POST | `/api/auth/login` | Não |
+| POST | `/api/auth/verify-email` | Não |
+| POST | `/api/auth/resend-verification` | Não |
 | POST | `/api/auth/forgot-password` | Não |
 | POST | `/api/auth/reset-password` | Não |
+| GET | `/api/auth/legal` | Não |
+| GET | `/api/auth/data-export` | Sim |
 
-O login tem limite por IP, limite por e-mail e bloqueio temporário da conta
-após tentativas repetidas de senha. A recuperação de senha salva apenas o hash
-do token temporário no banco e envia as instruções por e-mail quando o SMTP está
-configurado. Em desenvolvimento/teste o token pode voltar no JSON para facilitar
-a apresentação; em produção não exponha esse token.
+O cadastro exige aceite dos termos de uso e da política de privacidade. Contas
+novas só recebem token JWT depois de confirmar o e-mail; o backend salva apenas
+o hash do token de confirmação. O login tem limite por IP, limite por e-mail e
+bloqueio temporário da conta após tentativas repetidas de senha. A recuperação
+de senha salva apenas o hash do token temporário no banco e envia as instruções
+por e-mail quando o SMTP está configurado. Em desenvolvimento/teste os tokens
+podem voltar no JSON para facilitar a apresentação; em produção não exponha
+esses tokens.
+
+`GET /api/auth/data-export` retorna um JSON com os dados pessoais vinculados à
+conta autenticada (perfil, compras, importações NFC-e e lista), para atender a
+solicitações de portabilidade/exportação de dados.
 
 Contas `admin` e `superadmin` têm segundo fator obrigatório: depois da senha,
 o backend envia um código de 6 dígitos por e-mail e só libera o JWT em
@@ -84,9 +97,10 @@ hashadas, então continuam funcionando quando a API roda com múltiplos workers
 ou mais de uma instância.
 
 Em produção, a API não inicia se faltar configuração crítica: `MONGODB_URI`,
-`JWT_SECRET` forte, `CORS_ORIGIN` HTTPS, `PASSWORD_RESET_BASE_URL` HTTPS e SMTP
-completo (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`). Isso impede publicar o reset
-de senha sem envio de e-mail real ou com configuração de desenvolvimento.
+`JWT_SECRET` forte, `CORS_ORIGIN` HTTPS, URLs HTTPS de reset/confirmação de
+e-mail e SMTP completo (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`). Isso impede
+publicar fluxos de conta sem envio de e-mail real ou com configuração de
+desenvolvimento.
 
 ### NFC-e
 | Método | Rota | Auth |

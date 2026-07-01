@@ -9,8 +9,8 @@ import { useAuth } from '../context/AuthContext';
 import { colors, fonts, radius } from '../theme';
 
 export default function LoginScreen() {
-  const { login, register, solicitarResetSenha, redefinirSenha, confirmar2fa } = useAuth();
-  const [modo, setModo] = useState('login'); // 'login' | 'cadastro' | 'recuperar' | 'redefinir' | '2fa'
+  const { login, register, solicitarResetSenha, redefinirSenha, confirmar2fa, confirmarEmail, reenviarVerificacaoEmail } = useAuth();
+  const [modo, setModo] = useState('login'); // 'login' | 'cadastro' | 'recuperar' | 'redefinir' | 'verificar' | '2fa'
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -18,6 +18,8 @@ export default function LoginScreen() {
   const [erro, setErro] = useState(null);
   const [mensagem, setMensagem] = useState(null);
   const [carregando, setCarregando] = useState(false);
+  const [aceiteTermos, setAceiteTermos] = useState(false);
+  const [aceitePrivacidade, setAceitePrivacidade] = useState(false);
 
   function senhaForte(valor) {
     return valor.length >= 8 && /[a-z]/.test(valor) && /[A-Z]/.test(valor) && /\d/.test(valor);
@@ -27,7 +29,7 @@ export default function LoginScreen() {
     setModo(proximo);
     setErro(null);
     setMensagem(null);
-    if (proximo !== 'redefinir') setTokenReset('');
+    if (proximo !== 'redefinir' && proximo !== 'verificar') setTokenReset('');
   }
 
   async function enviar() {
@@ -44,8 +46,16 @@ export default function LoginScreen() {
       setErro('Use uma senha com 8+ caracteres, maiúscula, minúscula e número.');
       return;
     }
+    if (modo === 'cadastro' && (!aceiteTermos || !aceitePrivacidade)) {
+      setErro('Aceite os termos de uso e a política de privacidade.');
+      return;
+    }
     if (modo === 'redefinir' && tokenReset.trim().length < 16) {
       setErro('Informe o código de recuperação.');
+      return;
+    }
+    if (modo === 'verificar' && tokenReset.trim().length < 16) {
+      setErro('Informe o código de confirmação enviado por e-mail.');
       return;
     }
     if (modo === '2fa' && !/^\d{6}$/.test(tokenReset.trim())) {
@@ -56,7 +66,16 @@ export default function LoginScreen() {
     setCarregando(true);
     try {
       if (modo === 'cadastro') {
-        await register(nome.trim(), emailLimpo, senha);
+        const resposta = await register(nome.trim(), emailLimpo, senha, {
+          termos: aceiteTermos,
+          privacidade: aceitePrivacidade
+        });
+        if (resposta?.requires_email_verification) {
+          if (resposta?.email_verification_token_dev) setTokenReset(resposta.email_verification_token_dev);
+          setSenha('');
+          setMensagem(resposta?.message || 'Enviamos um código para confirmar seu e-mail.');
+          setModo('verificar');
+        }
       } else if (modo === 'recuperar') {
         const resposta = await solicitarResetSenha(emailLimpo);
         if (resposta?.reset_token_dev) setTokenReset(resposta.reset_token_dev);
@@ -68,6 +87,8 @@ export default function LoginScreen() {
         setTokenReset('');
         setModo('login');
         setMensagem(resposta?.message || 'Senha redefinida. Entre com a nova senha.');
+      } else if (modo === 'verificar') {
+        await confirmarEmail(emailLimpo, tokenReset.trim());
       } else if (modo === '2fa') {
         await confirmar2fa(emailLimpo, tokenReset.trim());
       } else {
@@ -77,6 +98,11 @@ export default function LoginScreen() {
           setSenha('');
           setMensagem(resposta?.message || 'Enviamos um código para confirmar seu acesso.');
           setModo('2fa');
+        } else if (resposta?.requires_email_verification) {
+          if (resposta?.email_verification_token_dev) setTokenReset(resposta.email_verification_token_dev);
+          setSenha('');
+          setMensagem(resposta?.message || 'Confirme seu e-mail antes de entrar.');
+          setModo('verificar');
         }
       }
     } catch (e) {
@@ -89,9 +115,10 @@ export default function LoginScreen() {
   const cadastro = modo === 'cadastro';
   const recuperar = modo === 'recuperar';
   const redefinir = modo === 'redefinir';
+  const verificar = modo === 'verificar';
   const doisFatores = modo === '2fa';
-  const titulo = cadastro ? 'Criar conta' : recuperar ? 'Recuperar senha' : redefinir ? 'Nova senha' : doisFatores ? 'Código admin' : 'Entrar';
-  const textoBotao = cadastro ? 'Cadastrar' : recuperar ? 'Enviar recuperação' : redefinir ? 'Redefinir senha' : doisFatores ? 'Confirmar código' : 'Entrar';
+  const titulo = cadastro ? 'Criar conta' : recuperar ? 'Recuperar senha' : redefinir ? 'Nova senha' : verificar ? 'Confirmar e-mail' : doisFatores ? 'Código admin' : 'Entrar';
+  const textoBotao = cadastro ? 'Cadastrar' : recuperar ? 'Enviar recuperação' : redefinir ? 'Redefinir senha' : verificar ? 'Confirmar e-mail' : doisFatores ? 'Confirmar código' : 'Entrar';
 
   return (
     <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
@@ -111,17 +138,17 @@ export default function LoginScreen() {
             <Campo icone="person-outline" placeholder="Seu nome" value={nome} onChangeText={setNome} autoCapitalize="words" />
           )}
           <Campo icone="mail-outline" placeholder="E-mail" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-          {(redefinir || doisFatores) && (
+          {(redefinir || verificar || doisFatores) && (
             <Campo
               icone="key-outline"
-              placeholder={doisFatores ? 'Código de 6 dígitos' : 'Código de recuperação'}
+              placeholder={doisFatores ? 'Código de 6 dígitos' : verificar ? 'Código de confirmação' : 'Código de recuperação'}
               value={tokenReset}
               onChangeText={setTokenReset}
               keyboardType={doisFatores ? 'number-pad' : 'default'}
               autoCapitalize="none"
             />
           )}
-          {!recuperar && !doisFatores && (
+          {!recuperar && !verificar && !doisFatores && (
             <Campo
               icone="lock-closed-outline"
               placeholder={cadastro || redefinir ? 'Senha forte' : 'Senha'}
@@ -129,6 +156,12 @@ export default function LoginScreen() {
               onChangeText={setSenha}
               secureTextEntry
             />
+          )}
+          {cadastro && (
+            <View style={styles.termosBox}>
+              <CheckLinha checked={aceiteTermos} onPress={() => setAceiteTermos((v) => !v)} texto="Aceito os termos de uso" />
+              <CheckLinha checked={aceitePrivacidade} onPress={() => setAceitePrivacidade((v) => !v)} texto="Aceito a política de privacidade" />
+            </View>
           )}
 
           {mensagem && <Text style={styles.sucesso}>{mensagem}</Text>}
@@ -144,10 +177,27 @@ export default function LoginScreen() {
             </Pressable>
           )}
 
-          {recuperar || redefinir || doisFatores ? (
-            <Pressable onPress={() => trocarModo('login')}>
-              <Text style={styles.alternar}>Voltar para <Text style={styles.alternarForte}>entrar</Text></Text>
-            </Pressable>
+          {recuperar || redefinir || verificar || doisFatores ? (
+            <>
+              {verificar && (
+                <Pressable
+                  onPress={async () => {
+                    try {
+                      const resposta = await reenviarVerificacaoEmail(email.trim().toLowerCase());
+                      if (resposta?.email_verification_token_dev) setTokenReset(resposta.email_verification_token_dev);
+                      setMensagem(resposta?.message || 'Enviamos um novo código.');
+                    } catch (e) {
+                      setErro(e.message || 'Não foi possível reenviar.');
+                    }
+                  }}
+                >
+                  <Text style={styles.esqueci}>Reenviar código</Text>
+                </Pressable>
+              )}
+              <Pressable onPress={() => trocarModo('login')}>
+                <Text style={styles.alternar}>Voltar para <Text style={styles.alternarForte}>entrar</Text></Text>
+              </Pressable>
+            </>
           ) : (
             <Pressable onPress={() => trocarModo(cadastro ? 'login' : 'cadastro')}>
               <Text style={styles.alternar}>
@@ -159,6 +209,15 @@ export default function LoginScreen() {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function CheckLinha({ checked, onPress, texto }) {
+  return (
+    <Pressable style={styles.checkLinha} onPress={onPress}>
+      <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={18} color={checked ? colors.brand : colors.inkMuted} />
+      <Text style={styles.checkTexto}>{texto}</Text>
+    </Pressable>
   );
 }
 
@@ -182,6 +241,9 @@ const styles = StyleSheet.create({
   titulo: { fontFamily: fonts.display, fontSize: 20, color: colors.ink, marginBottom: 16 },
   campo: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 12, height: 50, marginBottom: 12 },
   input: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.ink },
+  termosBox: { gap: 8, marginBottom: 12 },
+  checkLinha: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  checkTexto: { flex: 1, fontFamily: fonts.body, fontSize: 12.5, color: colors.inkSoft },
   erro: { fontFamily: fonts.medium, fontSize: 13, color: colors.danger, marginBottom: 10 },
   sucesso: { fontFamily: fonts.medium, fontSize: 13, color: colors.brandDark, marginBottom: 10, lineHeight: 18 },
   botao: { backgroundColor: colors.brand, borderRadius: radius.md, height: 52, alignItems: 'center', justifyContent: 'center', marginTop: 4 },

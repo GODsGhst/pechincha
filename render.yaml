@@ -27,6 +27,10 @@ services:
         value: https://pechincha-web.onrender.com
       - key: PASSWORD_RESET_EXPOSE_TOKEN
         value: "false"
+      - key: EMAIL_VERIFICATION_BASE_URL
+        value: https://pechincha-web.onrender.com
+      - key: EMAIL_VERIFICATION_EXPOSE_TOKEN
+        value: "false"
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT

@@ -72,8 +72,16 @@ function validarAmbiente() {
       throw new Error('PASSWORD_RESET_BASE_URL é obrigatório em produção e deve ser HTTPS');
     }
 
+    const emailVerificationBaseUrl = process.env.EMAIL_VERIFICATION_BASE_URL || process.env.PASSWORD_RESET_BASE_URL;
+    if (!urlHttpValida(emailVerificationBaseUrl, { exigirHttps: true })) {
+      throw new Error('EMAIL_VERIFICATION_BASE_URL deve ser HTTPS em produção');
+    }
+
     if (boolEnv(process.env.PASSWORD_RESET_EXPOSE_TOKEN)) {
       throw new Error('PASSWORD_RESET_EXPOSE_TOKEN não pode ser habilitado em produção');
+    }
+    if (boolEnv(process.env.EMAIL_VERIFICATION_EXPOSE_TOKEN)) {
+      throw new Error('EMAIL_VERIFICATION_EXPOSE_TOKEN não pode ser habilitado em produção');
     }
 
     if (!smtpConfigurado()) {

@@ -4,6 +4,7 @@ import {
   Check,
   ChevronDown,
   CircleAlert,
+  Download,
   Edit3,
   LogOut,
   Minus,
@@ -82,7 +83,14 @@ function ProductThumb({ uri, compact = false, iconSize = 18 }) {
 
 function LoginView({ onLogin }) {
   const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ nome: '', email: '', senha: '', token: '' });
+  const [form, setForm] = useState({
+    nome: '',
+    email: '',
+    senha: '',
+    token: '',
+    aceitarTermos: false,
+    aceitarPrivacidade: false
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -91,6 +99,14 @@ function LoginView({ onLogin }) {
     const params = new URLSearchParams(window.location.search);
     const email = params.get('email');
     const token = params.get('token');
+    const verifyEmail = params.get('verify_email');
+    const verifyToken = params.get('verify_token');
+    if (verifyEmail || verifyToken) {
+      setForm((prev) => ({ ...prev, email: verifyEmail || prev.email, token: verifyToken || prev.token }));
+      setMode('verify');
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
     if (email || token) {
       setForm((prev) => ({ ...prev, email: email || prev.email, token: token || prev.token }));
       setMode('reset');
@@ -105,6 +121,10 @@ function LoginView({ onLogin }) {
 
     if ((mode === 'register' || mode === 'reset') && !passwordStrong(form.senha)) {
       setError('Use uma senha com 8+ caracteres, maiúscula, minúscula e número.');
+      return;
+    }
+    if (mode === 'register' && (!form.aceitarTermos || !form.aceitarPrivacidade)) {
+      setError('Aceite os termos de uso e a política de privacidade.');
       return;
     }
 
@@ -130,6 +150,15 @@ function LoginView({ onLogin }) {
         onLogin(data.usuario);
         return;
       }
+      if (mode === 'verify') {
+        const data = await api.post('/auth/verify-email', {
+          email: form.email,
+          token: form.token.trim()
+        });
+        setStoredSession(data.token, data.usuario);
+        onLogin(data.usuario);
+        return;
+      }
       if (mode === 'reset') {
         const data = await api.post('/auth/reset-password', {
           email: form.email,
@@ -145,8 +174,24 @@ function LoginView({ onLogin }) {
       const path = mode === 'login' ? '/auth/login' : '/auth/register';
       const body = mode === 'login'
         ? { email: form.email, senha: form.senha }
-        : { nome: form.nome, email: form.email, senha: form.senha };
+        : {
+            nome: form.nome,
+            email: form.email,
+            senha: form.senha,
+            aceitar_termos: form.aceitarTermos,
+            aceitar_privacidade: form.aceitarPrivacidade
+          };
       const data = await api.post(path, body);
+      if (data.requires_email_verification) {
+        if (data.email_verification_token_dev) {
+          setForm((prev) => ({ ...prev, token: data.email_verification_token_dev, senha: '' }));
+        } else {
+          setForm((prev) => ({ ...prev, senha: '' }));
+        }
+        setNotice(data.message || 'Enviamos um código para confirmar seu e-mail.');
+        setMode('verify');
+        return;
+      }
       if (data.requires_2fa) {
         if (data.codigo_2fa_dev) setForm((prev) => ({ ...prev, token: data.codigo_2fa_dev, senha: '' }));
         else setForm((prev) => ({ ...prev, senha: '' }));
@@ -157,6 +202,16 @@ function LoginView({ onLogin }) {
       setStoredSession(data.token, data.usuario);
       onLogin(data.usuario);
     } catch (err) {
+      if (err.status === 403 && err.payload?.requires_email_verification) {
+        if (err.payload.email_verification_token_dev) {
+          setForm((prev) => ({ ...prev, token: err.payload.email_verification_token_dev, senha: '' }));
+        } else {
+          setForm((prev) => ({ ...prev, senha: '' }));
+        }
+        setNotice(err.payload.message || 'Confirme seu e-mail antes de entrar.');
+        setMode('verify');
+        return;
+      }
       setError(err.message || 'Não foi possível entrar.');
     } finally {
       setLoading(false);
@@ -177,7 +232,7 @@ function LoginView({ onLogin }) {
         <div className="switcher" role="tablist">
           <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">Entrar</button>
           <button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')} type="button">Criar conta</button>
-          <button className={mode === 'forgot' || mode === 'reset' || mode === '2fa' ? 'active' : ''} onClick={() => setMode('forgot')} type="button">Esqueci</button>
+          <button className={mode === 'forgot' || mode === 'reset' || mode === 'verify' || mode === '2fa' ? 'active' : ''} onClick={() => setMode('forgot')} type="button">Esqueci</button>
         </div>
 
         <form className="auth-form" onSubmit={submit}>
@@ -202,7 +257,7 @@ function LoginView({ onLogin }) {
               required
             />
           </label>
-          {mode !== 'forgot' && mode !== '2fa' && (
+          {mode !== 'forgot' && mode !== 'verify' && mode !== '2fa' && (
             <label>
               Senha
               <input
@@ -215,9 +270,29 @@ function LoginView({ onLogin }) {
               />
             </label>
           )}
-          {(mode === 'reset' || mode === '2fa') && (
+          {mode === 'register' && (
+            <div className="consent-box">
+              <label>
+                <input
+                  checked={form.aceitarTermos}
+                  onChange={(e) => setForm((prev) => ({ ...prev, aceitarTermos: e.target.checked }))}
+                  type="checkbox"
+                />
+                Aceito os termos de uso
+              </label>
+              <label>
+                <input
+                  checked={form.aceitarPrivacidade}
+                  onChange={(e) => setForm((prev) => ({ ...prev, aceitarPrivacidade: e.target.checked }))}
+                  type="checkbox"
+                />
+                Aceito a política de privacidade
+              </label>
+            </div>
+          )}
+          {(mode === 'reset' || mode === 'verify' || mode === '2fa') && (
             <label>
-              {mode === '2fa' ? 'Código administrativo' : 'Código de recuperação'}
+              {mode === '2fa' ? 'Código administrativo' : mode === 'verify' ? 'Código de confirmação' : 'Código de recuperação'}
               <input
                 value={form.token}
                 onChange={(e) => setForm((prev) => ({ ...prev, token: e.target.value }))}
@@ -230,8 +305,25 @@ function LoginView({ onLogin }) {
           {error && <div className="error-line"><CircleAlert size={16} />{error}</div>}
           <button className="primary full" disabled={loading} type="submit">
             <UserRound size={17} />
-            {loading ? 'Aguarde' : mode === 'login' ? 'Entrar' : mode === 'register' ? 'Criar conta' : mode === 'forgot' ? 'Enviar e-mail' : mode === '2fa' ? 'Confirmar código' : 'Redefinir senha'}
+            {loading ? 'Aguarde' : mode === 'login' ? 'Entrar' : mode === 'register' ? 'Criar conta' : mode === 'forgot' ? 'Enviar e-mail' : mode === '2fa' ? 'Confirmar código' : mode === 'verify' ? 'Confirmar e-mail' : 'Redefinir senha'}
           </button>
+          {mode === 'verify' && (
+            <button
+              className="ghost full"
+              onClick={async () => {
+                try {
+                  const data = await api.post('/auth/resend-verification', { email: form.email });
+                  if (data.email_verification_token_dev) setForm((prev) => ({ ...prev, token: data.email_verification_token_dev }));
+                  setNotice(data.message || 'Enviamos um novo código.');
+                } catch (err) {
+                  setError(err.message || 'Não foi possível reenviar.');
+                }
+              }}
+              type="button"
+            >
+              Reenviar código
+            </button>
+          )}
         </form>
       </section>
     </main>
@@ -379,6 +471,7 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingList, setLoadingList] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
   const [message, setMessage] = useState('');
 
   const selectedItems = useMemo(() => list.filter((item) => item.selecionado), [list]);
@@ -569,6 +662,28 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
     }
   }
 
+  async function exportData() {
+    setExportingData(true);
+    setMessage('');
+    try {
+      const data = await api.get('/auth/data-export', { skipCache: true });
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `pechincha-dados-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setMessage('Exportação de dados gerada.');
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível exportar seus dados.');
+    } finally {
+      setExportingData(false);
+    }
+  }
+
   function resetFilters() {
     setQuery('');
     setCategory(null);
@@ -588,6 +703,10 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
           </div>
         </div>
         <div className="topbar-actions">
+          <button className="ghost" onClick={exportData} disabled={exportingData} type="button">
+            <Download size={17} />
+            {exportingData ? 'Exportando' : 'Exportar dados'}
+          </button>
           <button className="ghost danger" onClick={deleteAccount} type="button">
             <Trash2 size={17} />
             Excluir conta

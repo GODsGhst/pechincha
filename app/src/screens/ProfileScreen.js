@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Alert, View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { Alert, View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,11 +23,12 @@ function dataHora(iso) {
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { usuario, logout, excluirConta } = useAuth();
+  const { usuario, logout, excluirConta, exportarDados } = useAuth();
   const [compras, setCompras] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
+  const [exportando, setExportando] = useState(false);
   const [offlineCache, setOfflineCache] = useState(false);
   const [buscasRecentes, setBuscasRecentes] = useState([]);
 
@@ -95,6 +96,28 @@ export default function ProfileScreen({ navigation }) {
     );
   }
 
+  async function solicitarExportacao() {
+    setExportando(true);
+    try {
+      const exportacao = await exportarDados();
+      const comprasTotal = exportacao?.dados?.compras?.length || 0;
+      const importacoesTotal = exportacao?.dados?.importacoes_nfce?.length || 0;
+      const itensLista = exportacao?.dados?.lista_compra?.itens?.length || 0;
+      await Share.share({
+        title: 'Exportação de dados do Pechincha',
+        message: JSON.stringify(exportacao, null, 2)
+      });
+      Alert.alert(
+        'Dados exportados',
+        `Compras: ${comprasTotal}\nImportações NFC-e: ${importacoesTotal}\nItens na lista: ${itensLista}\nExportado em: ${dataHora(exportacao?.exportado_em)}`
+      );
+    } catch (_e) {
+      Alert.alert('Não foi possível exportar', 'Tente novamente em alguns instantes.');
+    } finally {
+      setExportando(false);
+    }
+  }
+
   return (
     <ScrollView
       style={styles.tela}
@@ -152,6 +175,15 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.privacidadeTexto}>Seu login fica no armazenamento seguro do aparelho. Suas notas ficam no servidor vinculadas à sua conta.</Text>
         </View>
       </View>
+
+      <Pressable style={styles.exportar} onPress={solicitarExportacao} disabled={exportando}>
+        {exportando ? (
+          <ActivityIndicator size="small" color={colors.brandDark} />
+        ) : (
+          <Ionicons name="download-outline" size={18} color={colors.brandDark} />
+        )}
+        <Text style={styles.exportarTexto}>{exportando ? 'Exportando dados' : 'Exportar meus dados'}</Text>
+      </Pressable>
 
       <Text style={styles.secao}>Seu histórico</Text>
 
@@ -238,6 +270,8 @@ const styles = StyleSheet.create({
   privacidadeIcone: { width: 38, height: 38, borderRadius: radius.md, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   privacidadeTitulo: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
   privacidadeTexto: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkSoft, lineHeight: 18, marginTop: 2 },
+  exportar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10, height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.brandSoftLine, backgroundColor: colors.brandSoft },
+  exportarTexto: { fontFamily: fonts.semibold, fontSize: 14, color: colors.brandDark },
   secao: { fontFamily: fonts.display, fontSize: 16, color: colors.ink, marginTop: 24, marginBottom: 10 },
   insightsBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 12, marginBottom: 10 },
   insightsTitulo: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink, marginBottom: 8 },

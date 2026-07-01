@@ -84,6 +84,38 @@ async function enviarResetSenha({ email, nome, token, resetUrl }) {
   return enviarEmail({ to: destino, subject: assunto, text: texto, html });
 }
 
+async function enviarVerificacaoEmail({ email, nome, token, verificacaoUrl }) {
+  const destino = String(email || '').trim().toLowerCase();
+  const assunto = 'Confirme seu e-mail no Pechincha';
+  const saudacao = nome ? `Olá, ${nome}.` : 'Olá.';
+  const saudacaoHtml = escapeHtml(saudacao);
+  const tokenHtml = escapeHtml(token);
+  const verificacaoUrlHtml = verificacaoUrl ? escapeHtml(verificacaoUrl) : null;
+  const texto = [
+    saudacao,
+    '',
+    'Confirme seu e-mail para ativar sua conta.',
+    verificacaoUrl
+      ? `Abra este link para confirmar: ${verificacaoUrl}`
+      : `Use este código no app/site: ${token}`,
+    '',
+    'Esse código expira em 24 horas. Se você não criou essa conta, ignore este e-mail.'
+  ].join('\n');
+
+  const html = `
+    <p>${saudacaoHtml}</p>
+    <p>Confirme seu e-mail para ativar sua conta.</p>
+    <p>${
+      verificacaoUrl
+        ? `<a href="${verificacaoUrlHtml}">Clique aqui para confirmar seu e-mail</a>.`
+        : `Use este código no app/site: <strong>${tokenHtml}</strong>`
+    }</p>
+    <p>Esse código expira em 24 horas. Se você não criou essa conta, ignore este e-mail.</p>
+  `;
+
+  return enviarEmail({ to: destino, subject: assunto, text: texto, html });
+}
+
 async function enviarCodigoAdmin2fa({ email, nome, codigo }) {
   const destino = String(email || '').trim().toLowerCase();
   const assunto = 'Código de acesso administrativo do Pechincha';
@@ -110,4 +142,4 @@ async function enviarCodigoAdmin2fa({ email, nome, codigo }) {
   return enviarEmail({ to: destino, subject: assunto, text: texto, html });
 }
 
-module.exports = { enviarEmail, enviarResetSenha, enviarCodigoAdmin2fa, smtpConfigurado };
+module.exports = { enviarEmail, enviarResetSenha, enviarVerificacaoEmail, enviarCodigoAdmin2fa, smtpConfigurado };

@@ -61,16 +61,31 @@ export function AuthProvider({ children }) {
   }
 
   async function login(email, senha) {
-    const resposta = await api.post('/auth/login', { email, senha });
+    let resposta;
+    try {
+      resposta = await api.post('/auth/login', { email, senha });
+    } catch (e) {
+      if (e?.status === 403 && e?.payload?.requires_email_verification) return e.payload;
+      throw e;
+    }
     if (resposta?.requires_2fa) return resposta;
     const { token, usuario: u } = resposta;
     await persistirSessao(token, u);
     return resposta;
   }
 
-  async function register(nome, email, senha) {
-    const { token, usuario: u } = await api.post('/auth/register', { nome, email, senha });
+  async function register(nome, email, senha, aceite = {}) {
+    const resposta = await api.post('/auth/register', {
+      nome,
+      email,
+      senha,
+      aceitar_termos: Boolean(aceite.termos),
+      aceitar_privacidade: Boolean(aceite.privacidade)
+    });
+    if (resposta?.requires_email_verification) return resposta;
+    const { token, usuario: u } = resposta;
     await persistirSessao(token, u);
+    return resposta;
   }
 
   async function solicitarResetSenha(email) {
@@ -84,6 +99,19 @@ export function AuthProvider({ children }) {
   async function confirmar2fa(email, codigo) {
     const { token, usuario: u } = await api.post('/auth/verify-2fa', { email, codigo });
     await persistirSessao(token, u);
+  }
+
+  async function confirmarEmail(email, tokenVerificacao) {
+    const { token, usuario: u } = await api.post('/auth/verify-email', { email, token: tokenVerificacao });
+    await persistirSessao(token, u);
+  }
+
+  async function reenviarVerificacaoEmail(email) {
+    return api.post('/auth/resend-verification', { email });
+  }
+
+  async function exportarDados() {
+    return api.get('/auth/data-export', { timeoutMs: 30000, skipCache: true });
   }
 
   async function logout() {
@@ -110,6 +138,9 @@ export function AuthProvider({ children }) {
       solicitarResetSenha,
       redefinirSenha,
       confirmar2fa,
+      confirmarEmail,
+      reenviarVerificacaoEmail,
+      exportarDados,
       logout,
       excluirConta
     }}>

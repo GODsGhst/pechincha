@@ -43,6 +43,8 @@ Aplicativo mobile em Expo/React Native focado em dois gestos de baixo atrito:
 Além de **busca de preços** e **login** (cada usuário vê apenas suas notas).
 O app também mantém cache local e uma fila offline para lista de compras e
 cupons já lidos por QR, sincronizando quando a conexão volta.
+O cadastro exige aceite de termos/política de privacidade e confirmação de
+e-mail antes de liberar a conta.
 
 ### Segurança
 
@@ -50,6 +52,9 @@ O app faz a requisição à SEFAZ e envia os dados ao backend, que faz o cadastr
 e a análise — apenas o resultado volta ao aplicativo. Nenhuma regra de negócio
 ou credencial de banco fica no dispositivo (cliente fino). O token JWT é
 guardado no Keychain (iOS) / Keystore (Android).
+
+O backend oferece confirmação de e-mail, 2FA para admin/superadmin, exportação
+de dados do usuário e exclusão de conta/dados vinculados.
 
 ### Design
 

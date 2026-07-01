@@ -180,8 +180,12 @@ async function main() {
     'produção exige SMTP para recuperação de senha');
   verificar(ambienteFalha({ ...ambienteBaseProducao, PASSWORD_RESET_EXPOSE_TOKEN: 'true' }, 'PASSWORD_RESET_EXPOSE_TOKEN'),
     'produção bloqueia exposição de token de reset');
+  verificar(ambienteFalha({ ...ambienteBaseProducao, EMAIL_VERIFICATION_EXPOSE_TOKEN: 'true' }, 'EMAIL_VERIFICATION_EXPOSE_TOKEN'),
+    'produção bloqueia exposição de token de verificação de e-mail');
   verificar(ambienteFalha({ ...ambienteBaseProducao, PASSWORD_RESET_BASE_URL: 'http://pechincha-web.onrender.com' }, 'PASSWORD_RESET_BASE_URL'),
     'produção exige URL HTTPS para reset');
+  verificar(ambienteFalha({ ...ambienteBaseProducao, EMAIL_VERIFICATION_BASE_URL: 'http://pechincha-web.onrender.com' }, 'EMAIL_VERIFICATION_BASE_URL'),
+    'produção exige URL HTTPS para verificação de e-mail');
   verificar(ambienteFalha({ ...ambienteBaseProducao, CORS_ORIGIN: 'http://localhost:5173' }, 'CORS_ORIGIN'),
     'produção exige CORS com origem HTTPS explícita');
 
@@ -211,22 +215,65 @@ async function main() {
 
   const senhaTeste = 'Senha123';
   const senhaRecuperada = 'NovaSenha123';
+  const aceiteLgpd = { aceitar_termos: true, aceitar_privacidade: true };
+
+  async function confirmarEmailCadastro(registro, email, nomeTeste) {
+    const verificacao = await req('POST', '/auth/verify-email', {
+      email,
+      token: registro.json.email_verification_token_dev
+    });
+    verificar(verificacao.status === 200 && !!verificacao.json.token && verificacao.json.usuario.email_verificado === true,
+      nomeTeste);
+    return verificacao;
+  }
+
+  const legal = await req('GET', '/auth/legal');
+  verificar(legal.status === 200 && legal.json.termos_versao && legal.json.politica_versao,
+    'API expõe versão de termos e política de privacidade');
 
   const regSenhaFraca = await req('POST', '/auth/register', { nome: 'Senha Fraca', email: 'fraca@email.com', senha: 'senha123' });
   verificar(regSenhaFraca.status === 400, 'register rejeita senha sem maiúscula');
 
-  const reg = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: senhaTeste });
-  verificar(reg.status === 201 && !!reg.json.token, 'register retorna 201 + token');
-  verificar(reg.json.usuario.papel === 'usuario', 'register retorna papel usuario');
+  const regSemLgpd = await req('POST', '/auth/register', { nome: 'Sem LGPD', email: 'semlgpd@email.com', senha: senhaTeste });
+  verificar(regSemLgpd.status === 400, 'register exige aceite de termos e privacidade');
+
+  const reg = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: senhaTeste, ...aceiteLgpd });
+  verificar(reg.status === 201 &&
+    reg.json.requires_email_verification === true &&
+    /^[a-f0-9]{64}$/i.test(reg.json.email_verification_token_dev || '') &&
+    !reg.json.token,
+    'register cria conta pendente de confirmação de e-mail');
+  verificar(reg.json.usuario.papel === 'usuario' && reg.json.usuario.email_verificado === false,
+    'register retorna usuário comum ainda não verificado');
 
   const usuarioSemSenha = await Usuario.findOne({ email: 'joao@email.com' });
   verificar(usuarioSemSenha && !usuarioSemSenha.senha, 'senha não é selecionada por padrão no Mongo');
 
-  const regDup = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: senhaTeste });
+  const loginAntesVerificar = await req('POST', '/auth/login', { email: 'joao@email.com', senha: senhaTeste });
+  verificar(loginAntesVerificar.status === 403 && loginAntesVerificar.json.requires_email_verification === true,
+    'login bloqueia conta sem e-mail confirmado');
+
+  const verificacaoEmailInvalida = await req('POST', '/auth/verify-email', {
+    email: 'joao@email.com',
+    token: '0'.repeat(64)
+  });
+  verificar(verificacaoEmailInvalida.status === 400, 'verify-email rejeita token inválido');
+
+  const verificacaoEmail = await req('POST', '/auth/verify-email', {
+    email: 'joao@email.com',
+    token: loginAntesVerificar.json.email_verification_token_dev
+  });
+  verificar(verificacaoEmail.status === 200 &&
+    !!verificacaoEmail.json.token &&
+    verificacaoEmail.json.usuario.email_verificado === true,
+    'verify-email confirma conta e libera token usando código mais recente');
+
+  const regDup = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: senhaTeste, ...aceiteLgpd });
   verificar(regDup.status === 409, 'register duplicado retorna 409');
 
-  const recReg = await req('POST', '/auth/register', { nome: 'Recupera Senha', email: 'recupera@email.com', senha: senhaTeste });
+  const recReg = await req('POST', '/auth/register', { nome: 'Recupera Senha', email: 'recupera@email.com', senha: senhaTeste, ...aceiteLgpd });
   verificar(recReg.status === 201, 'cria usuário para fluxo de recuperação de senha');
+  await confirmarEmailCadastro(recReg, 'recupera@email.com', 'confirma e-mail do usuário de recuperação');
 
   const forgot = await req('POST', '/auth/forgot-password', { email: 'recupera@email.com' });
   verificar(forgot.status === 200 && /^[a-f0-9]{64}$/i.test(forgot.json.reset_token_dev || ''),
@@ -252,12 +299,17 @@ async function main() {
 
   const login = await req('POST', '/auth/login', { email: 'joao@email.com', senha: senhaTeste });
   verificar(login.status === 200 && !!login.json.token, 'login retorna 200 + token');
-  const token = login.json.token;
+  const token = login.json.token || verificacaoEmail.json.token;
   const me = await req('GET', '/auth/me', null, token);
-  verificar(me.status === 200 && me.json.usuario.email === 'joao@email.com',
+  verificar(me.status === 200 && me.json.usuario.email === 'joao@email.com' && me.json.usuario.lgpd,
     'auth/me retorna usuário atual autenticado');
   verificar((me.headers.get('cache-control') || '').includes('no-store'),
     'dados autenticados usam no-store');
+  const exportacaoDados = await req('GET', '/auth/data-export', null, token);
+  verificar(exportacaoDados.status === 200 &&
+    exportacaoDados.json.usuario.email === 'joao@email.com' &&
+    Array.isArray(exportacaoDados.json.dados.compras),
+    'usuário autenticado exporta dados pessoais em formato JSON');
 
   const loginErrado = await req('POST', '/auth/login', { email: 'joao@email.com', senha: 'errada' });
   verificar(loginErrado.status === 401, 'login com senha errada retorna 401');
@@ -282,8 +334,9 @@ async function main() {
   verificar(estabelecimentoDireto.status === 403, 'usuário comum não cria estabelecimento direto');
 
   console.log('\n--- Administração ---');
-  const adminReg = await req('POST', '/auth/register', { nome: 'Admin Geral', email: 'admin@email.com', senha: senhaTeste });
+  const adminReg = await req('POST', '/auth/register', { nome: 'Admin Geral', email: 'admin@email.com', senha: senhaTeste, ...aceiteLgpd });
   verificar(adminReg.status === 201, 'cria usuário que será promovido a admin');
+  await confirmarEmailCadastro(adminReg, 'admin@email.com', 'confirma e-mail do admin');
   await Usuario.updateOne({ email: 'admin@email.com' }, { $set: { papel: 'admin' } });
   const adminLogin = await req('POST', '/auth/login', { email: 'admin@email.com', senha: senhaTeste });
   verificar(adminLogin.status === 202 &&
@@ -301,8 +354,9 @@ async function main() {
     '2FA admin libera token após código válido');
   const adminToken = admin2fa.json.token;
 
-  const superReg = await req('POST', '/auth/register', { nome: 'Super Admin', email: 'super@email.com', senha: senhaTeste });
+  const superReg = await req('POST', '/auth/register', { nome: 'Super Admin', email: 'super@email.com', senha: senhaTeste, ...aceiteLgpd });
   verificar(superReg.status === 201, 'cria usuário que será promovido a superadmin');
+  await confirmarEmailCadastro(superReg, 'super@email.com', 'confirma e-mail do superadmin');
   await Usuario.updateOne({ email: 'super@email.com' }, { $set: { papel: 'superadmin' } });
   const superLogin = await req('POST', '/auth/login', { email: 'super@email.com', senha: senhaTeste });
   verificar(superLogin.status === 202 && superLogin.json.requires_2fa === true && superLogin.json.usuario.papel === 'superadmin',
