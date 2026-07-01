@@ -57,6 +57,10 @@ function isAdminRole(role) {
   return role === 'admin' || role === 'superadmin';
 }
 
+function passwordStrong(value) {
+  return value.length >= 8 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value);
+}
+
 function ProductThumb({ uri, compact = false, iconSize = 18 }) {
   const [failed, setFailed] = useState(false);
   const showImage = Boolean(uri) && !failed;
@@ -96,9 +100,15 @@ function LoginView({ onLogin }) {
 
   async function submit(event) {
     event.preventDefault();
-    setLoading(true);
     setError('');
     setNotice('');
+
+    if ((mode === 'register' || mode === 'reset') && !passwordStrong(form.senha)) {
+      setError('Use uma senha com 8+ caracteres, maiúscula, minúscula e número.');
+      return;
+    }
+
+    setLoading(true);
     try {
       if (mode === 'forgot') {
         const data = await api.post('/auth/forgot-password', { email: form.email });
@@ -172,17 +182,19 @@ function LoginView({ onLogin }) {
               required
             />
           </label>
-          <label>
-            Senha
-            <input
-              value={form.senha}
-              onChange={(e) => setForm((prev) => ({ ...prev, senha: e.target.value }))}
-              type="password"
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              minLength={mode === 'register' || mode === 'reset' ? 8 : undefined}
-              required={mode !== 'forgot'}
-            />
-          </label>
+          {mode !== 'forgot' && (
+            <label>
+              Senha
+              <input
+                value={form.senha}
+                onChange={(e) => setForm((prev) => ({ ...prev, senha: e.target.value }))}
+                type="password"
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                minLength={mode === 'register' || mode === 'reset' ? 8 : undefined}
+                required
+              />
+            </label>
+          )}
           {mode === 'reset' && (
             <label>
               Código de recuperação

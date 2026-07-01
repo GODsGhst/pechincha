@@ -19,6 +19,7 @@ const RESET_TOKEN_BYTES = 32;
 const RESET_EXPIRA_MS = 60 * 60 * 1000;
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync('senha-invalida-para-equalizar-tempo', SALT_ROUNDS);
 const RESET_GENERIC_MESSAGE = 'Se o e-mail estiver cadastrado, enviaremos as instruções para redefinir a senha.';
+const PASSWORD_POLICY_MESSAGE = 'A senha deve ter entre 8 e 128 caracteres, com letra maiúscula, letra minúscula e número';
 
 function gerarToken(usuario) {
   return jwt.sign({ id: usuario._id, papel: usuario.papel || 'usuario' }, process.env.JWT_SECRET, {
@@ -37,7 +38,10 @@ function normalizarEmail(email) {
 function senhaValida(senha) {
   return typeof senha === 'string' &&
     senha.length >= MIN_PASSWORD_LENGTH &&
-    senha.length <= MAX_PASSWORD_LENGTH;
+    senha.length <= MAX_PASSWORD_LENGTH &&
+    /[a-z]/.test(senha) &&
+    /[A-Z]/.test(senha) &&
+    /\d/.test(senha);
 }
 
 function hashResetToken(token) {
@@ -54,6 +58,10 @@ function compararHexSeguro(a, b) {
 
 function resetDevHabilitado() {
   return process.env.NODE_ENV !== 'production' || process.env.PASSWORD_RESET_EXPOSE_TOKEN === 'true';
+}
+
+function entregaResetDisponivel() {
+  return emailService.smtpConfigurado() || resetDevHabilitado();
 }
 
 function montarResetUrl(email, token) {
@@ -142,7 +150,7 @@ async function register(req, res, next) {
       return res.status(400).json({ error: 'E-mail inválido' });
     }
     if (!senhaValida(senhaTexto)) {
-      return res.status(400).json({ error: 'A senha deve ter entre 8 e 128 caracteres' });
+      return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
     }
 
     const jaExiste = await Usuario.findOne({ email: emailNormalizado });
@@ -208,7 +216,7 @@ async function forgotPassword(req, res, next) {
       .select('+reset_senha.token_hash +reset_senha.expira_em +reset_senha.solicitado_em');
 
     const payload = { message: RESET_GENERIC_MESSAGE };
-    if (usuario) {
+    if (usuario && entregaResetDisponivel()) {
       const token = crypto.randomBytes(RESET_TOKEN_BYTES).toString('hex');
       usuario.reset_senha = {
         token_hash: hashResetToken(token),
@@ -221,6 +229,8 @@ async function forgotPassword(req, res, next) {
       if (resetDevHabilitado()) {
         payload.reset_token_dev = token;
       }
+    } else if (usuario) {
+      console.warn(`[reset-senha] SMTP indisponível; token não gerado para ${usuario.email}`);
     }
 
     return res.json(payload);
@@ -243,7 +253,7 @@ async function resetPassword(req, res, next) {
       return res.status(400).json({ error: 'Código de recuperação inválido ou expirado' });
     }
     if (!senhaValida(senhaTexto)) {
-      return res.status(400).json({ error: 'A senha deve ter entre 8 e 128 caracteres' });
+      return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
     }
 
     const usuario = await Usuario.findOne({ email: emailNormalizado })
@@ -292,7 +302,15 @@ async function removerConta(req, res, next) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
-    if (['admin', 'superadmin'].includes(usuario.papel)) {
+    if (usuario.papel === 'superadmin') {
+      const outrosSuperAdmins = await Usuario.countDocuments({
+        _id: { $ne: usuario._id },
+        papel: 'superadmin'
+      });
+      if (outrosSuperAdmins === 0) {
+        return res.status(400).json({ error: 'Não é possível excluir o último super administrador' });
+      }
+    } else if (usuario.papel === 'admin') {
       const outrosAdmins = await Usuario.countDocuments({
         _id: { $ne: usuario._id },
         papel: { $in: ['admin', 'superadmin'] }

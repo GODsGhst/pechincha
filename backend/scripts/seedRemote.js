@@ -19,7 +19,7 @@ const seed = require('./seed');
   await mongoose.connect(uri);
   const resumo = await seed();
   console.log('Seed concluído:', JSON.stringify(resumo));
-  console.log('Login de teste: demo@consultprice.com / senha123');
+  console.log('Login de teste: demo@consultprice.com / Senha123');
   await mongoose.disconnect();
   process.exit(0);
 })().catch((err) => {

@@ -59,7 +59,7 @@ async function seedInicialSeVazio() {
     console.log(`  Local:   http://localhost:${PORT}/api`);
     console.log(`  Celular: http://${ip}:${PORT}/api  (mesma Wi-Fi)`);
     console.log(`  Banco:   ${dbPath}`);
-    console.log('  Login de teste:  demo@consultprice.com / senha123');
+    console.log('  Login de teste:  demo@consultprice.com / Senha123');
     console.log('  Dados:', JSON.stringify(resumo));
     console.log('  (notas salvas continuam após reiniciar)');
     console.log('========================================\n');

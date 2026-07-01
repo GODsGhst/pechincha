@@ -26,6 +26,15 @@ function remetente() {
   return process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@pechincha.local';
 }
 
+function escapeHtml(valor) {
+  return String(valor || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function enviarEmail({ to, subject, text, html }) {
   const tx = transporter();
   if (!tx) {
@@ -47,6 +56,9 @@ async function enviarResetSenha({ email, nome, token, resetUrl }) {
   const destino = String(email || '').trim().toLowerCase();
   const assunto = 'Redefinição de senha do Pechincha';
   const saudacao = nome ? `Olá, ${nome}.` : 'Olá.';
+  const saudacaoHtml = escapeHtml(saudacao);
+  const resetUrlHtml = resetUrl ? escapeHtml(resetUrl) : null;
+  const tokenHtml = escapeHtml(token);
   const texto = [
     saudacao,
     '',
@@ -59,12 +71,12 @@ async function enviarResetSenha({ email, nome, token, resetUrl }) {
   ].join('\n');
 
   const html = `
-    <p>${saudacao}</p>
+    <p>${saudacaoHtml}</p>
     <p>Recebemos uma solicitação para redefinir sua senha.</p>
     <p>${
       resetUrl
-        ? `<a href="${resetUrl}">Clique aqui para criar uma nova senha</a>.`
-        : `Use este código de recuperação no app/site: <strong>${token}</strong>`
+        ? `<a href="${resetUrlHtml}">Clique aqui para criar uma nova senha</a>.`
+        : `Use este código de recuperação no app/site: <strong>${tokenHtml}</strong>`
     }</p>
     <p>Esse código expira em 1 hora. Se você não pediu essa alteração, ignore este e-mail.</p>
   `;

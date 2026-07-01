@@ -13,12 +13,12 @@ npm install
 # MODO DEMO — sobe um MongoDB em memória já populado com dados de exemplo.
 # Não precisa instalar nem configurar banco. Os dados somem ao encerrar.
 npm run dev:demo
-#   Login de teste: demo@consultprice.com / senha123
+#   Login de teste: demo@consultprice.com / Senha123
 
 # MODO PERSISTENTE LOCAL — salva as notas em backend/.data/mongodb.
 # Também não precisa instalar MongoDB. Use este para testar salvamento real.
 npm run dev:persist
-#   Login de teste: demo@consultprice.com / senha123
+#   Login de teste: demo@consultprice.com / Senha123
 
 # desenvolvimento real (precisa do MONGODB_URI no .env — Atlas ou local)
 cp .env.example .env

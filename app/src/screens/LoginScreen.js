@@ -19,6 +19,10 @@ export default function LoginScreen() {
   const [mensagem, setMensagem] = useState(null);
   const [carregando, setCarregando] = useState(false);
 
+  function senhaForte(valor) {
+    return valor.length >= 8 && /[a-z]/.test(valor) && /[A-Z]/.test(valor) && /\d/.test(valor);
+  }
+
   function trocarModo(proximo) {
     setModo(proximo);
     setErro(null);
@@ -36,8 +40,8 @@ export default function LoginScreen() {
       return;
     }
 
-    if ((modo === 'cadastro' || modo === 'redefinir') && senha.length < 8) {
-      setErro('A senha precisa ter pelo menos 8 caracteres.');
+    if ((modo === 'cadastro' || modo === 'redefinir') && !senhaForte(senha)) {
+      setErro('Use uma senha com 8+ caracteres, maiúscula, minúscula e número.');
       return;
     }
     if (modo === 'redefinir' && tokenReset.trim().length < 16) {
@@ -106,7 +110,7 @@ export default function LoginScreen() {
           {!recuperar && (
             <Campo
               icone="lock-closed-outline"
-              placeholder={cadastro || redefinir ? 'Senha com 8+ caracteres' : 'Senha'}
+              placeholder={cadastro || redefinir ? 'Senha forte' : 'Senha'}
               value={senha}
               onChangeText={setSenha}
               secureTextEntry

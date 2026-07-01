@@ -37,7 +37,7 @@ function ipLocal() {
     console.log(`  Local:   http://localhost:${PORT}/api`);
     console.log(`  Celular: http://${ip}:${PORT}/api  (mesma Wi-Fi)`);
     console.log('  Dados de exemplo:', JSON.stringify(resumo));
-    console.log('  Login de teste:  demo@consultprice.com / senha123');
+    console.log('  Login de teste:  demo@consultprice.com / Senha123');
     console.log('  (dados em memória — somem ao encerrar com Ctrl+C)');
     console.log('========================================\n');
   });

@@ -39,7 +39,7 @@ async function seed() {
     HistoricoPreco.deleteMany({}),
   ]);
 
-  const senhaHash = await bcrypt.hash('senha123', 10);
+  const senhaHash = await bcrypt.hash('Senha123', 10);
   const usuario = await Usuario.create({ nome: 'João Demonstração', email: 'demo@consultprice.com', senha: senhaHash });
 
   const lojas = await Estabelecimento.create(ESTABELECIMENTOS);

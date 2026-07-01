@@ -147,17 +147,23 @@ async function main() {
   const queryGrande = await req('GET', `/produtos?nome=${'a'.repeat(221)}`);
   verificar(queryGrande.status === 400, 'API bloqueia parâmetro de consulta muito longo');
 
-  const reg = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: 'senha123' });
+  const senhaTeste = 'Senha123';
+  const senhaRecuperada = 'NovaSenha123';
+
+  const regSenhaFraca = await req('POST', '/auth/register', { nome: 'Senha Fraca', email: 'fraca@email.com', senha: 'senha123' });
+  verificar(regSenhaFraca.status === 400, 'register rejeita senha sem maiúscula');
+
+  const reg = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: senhaTeste });
   verificar(reg.status === 201 && !!reg.json.token, 'register retorna 201 + token');
   verificar(reg.json.usuario.papel === 'usuario', 'register retorna papel usuario');
 
   const usuarioSemSenha = await Usuario.findOne({ email: 'joao@email.com' });
   verificar(usuarioSemSenha && !usuarioSemSenha.senha, 'senha não é selecionada por padrão no Mongo');
 
-  const regDup = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: 'senha123' });
+  const regDup = await req('POST', '/auth/register', { nome: 'João Silva', email: 'joao@email.com', senha: senhaTeste });
   verificar(regDup.status === 409, 'register duplicado retorna 409');
 
-  const recReg = await req('POST', '/auth/register', { nome: 'Recupera Senha', email: 'recupera@email.com', senha: 'senha123' });
+  const recReg = await req('POST', '/auth/register', { nome: 'Recupera Senha', email: 'recupera@email.com', senha: senhaTeste });
   verificar(recReg.status === 201, 'cria usuário para fluxo de recuperação de senha');
 
   const forgot = await req('POST', '/auth/forgot-password', { email: 'recupera@email.com' });
@@ -167,22 +173,22 @@ async function main() {
   const resetInvalido = await req('POST', '/auth/reset-password', {
     email: 'recupera@email.com',
     token: '0'.repeat(64),
-    senha: 'novaSenha123'
+    senha: senhaRecuperada
   });
   verificar(resetInvalido.status === 400, 'reset-password rejeita token inválido');
 
   const resetOk = await req('POST', '/auth/reset-password', {
     email: 'recupera@email.com',
     token: forgot.json.reset_token_dev,
-    senha: 'novaSenha123'
+    senha: senhaRecuperada
   });
   verificar(resetOk.status === 200, 'reset-password aceita token válido e troca senha');
 
-  const loginSenhaNova = await req('POST', '/auth/login', { email: 'recupera@email.com', senha: 'novaSenha123' });
+  const loginSenhaNova = await req('POST', '/auth/login', { email: 'recupera@email.com', senha: senhaRecuperada });
   verificar(loginSenhaNova.status === 200 && !!loginSenhaNova.json.token,
     'login funciona com a senha redefinida');
 
-  const login = await req('POST', '/auth/login', { email: 'joao@email.com', senha: 'senha123' });
+  const login = await req('POST', '/auth/login', { email: 'joao@email.com', senha: senhaTeste });
   verificar(login.status === 200 && !!login.json.token, 'login retorna 200 + token');
   const token = login.json.token;
   const me = await req('GET', '/auth/me', null, token);
@@ -209,17 +215,17 @@ async function main() {
   verificar(estabelecimentoDireto.status === 403, 'usuário comum não cria estabelecimento direto');
 
   console.log('\n--- Administração ---');
-  const adminReg = await req('POST', '/auth/register', { nome: 'Admin Geral', email: 'admin@email.com', senha: 'senha123' });
+  const adminReg = await req('POST', '/auth/register', { nome: 'Admin Geral', email: 'admin@email.com', senha: senhaTeste });
   verificar(adminReg.status === 201, 'cria usuário que será promovido a admin');
   await Usuario.updateOne({ email: 'admin@email.com' }, { $set: { papel: 'admin' } });
-  const adminLogin = await req('POST', '/auth/login', { email: 'admin@email.com', senha: 'senha123' });
+  const adminLogin = await req('POST', '/auth/login', { email: 'admin@email.com', senha: senhaTeste });
   verificar(adminLogin.status === 200 && adminLogin.json.usuario.papel === 'admin', 'login admin retorna papel admin');
   const adminToken = adminLogin.json.token;
 
-  const superReg = await req('POST', '/auth/register', { nome: 'Super Admin', email: 'super@email.com', senha: 'senha123' });
+  const superReg = await req('POST', '/auth/register', { nome: 'Super Admin', email: 'super@email.com', senha: senhaTeste });
   verificar(superReg.status === 201, 'cria usuário que será promovido a superadmin');
   await Usuario.updateOne({ email: 'super@email.com' }, { $set: { papel: 'superadmin' } });
-  const superLogin = await req('POST', '/auth/login', { email: 'super@email.com', senha: 'senha123' });
+  const superLogin = await req('POST', '/auth/login', { email: 'super@email.com', senha: senhaTeste });
   verificar(superLogin.status === 200 && superLogin.json.usuario.papel === 'superadmin',
     'login superadmin retorna papel superadmin');
   const superToken = superLogin.json.token;
@@ -242,6 +248,9 @@ async function main() {
   const superUser = usuariosAdmin.json.usuarios.find((u) => u.email === 'super@email.com');
   const removerUltimoSuper = await req('PUT', `/admin/usuarios/${superUser.id}/papel`, { papel: 'admin' }, superToken);
   verificar(removerUltimoSuper.status === 400, 'não remove o último superadmin');
+
+  const excluirUltimoSuper = await req('DELETE', '/auth/me', null, superToken);
+  verificar(excluirUltimoSuper.status === 400, 'não exclui a própria conta quando é o último superadmin');
 
   const superAlteraPapel = await req('PUT', `/admin/usuarios/${adminUser.id}/papel`, { papel: 'usuario' }, superToken);
   verificar(superAlteraPapel.status === 200 && superAlteraPapel.json.papel === 'usuario',
