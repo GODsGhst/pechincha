@@ -105,6 +105,27 @@ async function garantirIndiceUnicoChaveDedup() {
   };
 }
 
+async function garantirIndicesHistorico() {
+  const nomeIndice = 'idx_historico_produto_data_desc';
+  const indexes = await HistoricoPreco.collection.indexes();
+  const existente = indexes.find((index) => index.name === nomeIndice);
+
+  if (existente) {
+    return { status: 'existente', nome: nomeIndice };
+  }
+
+  if (!aplicar) {
+    return { status: 'dry-run-criaria', nome: nomeIndice };
+  }
+
+  await HistoricoPreco.collection.createIndex(
+    { produto_id: 1, data: -1 },
+    { name: nomeIndice, background: true }
+  );
+
+  return { status: 'criado', nome: nomeIndice };
+}
+
 async function mesclarGrupo(grupo) {
   const principal = escolherPrincipal(grupo);
   const duplicados = grupo.filter((item) => String(item.produto._id) !== String(principal.produto._id));
@@ -185,6 +206,7 @@ async function main() {
   }
 
   const indiceChaveDedup = await garantirIndiceUnicoChaveDedup();
+  const indicesHistorico = await garantirIndicesHistorico();
 
   console.log(JSON.stringify({
     modo: aplicar ? 'apply' : 'dry-run',
@@ -193,6 +215,7 @@ async function main() {
     grupos_duplicados_para_mesclar: gruposMesclados,
     produtos_duplicados_para_remover: produtosRemovidos,
     indice_chave_dedup: indiceChaveDedup,
+    indices_historico: indicesHistorico,
     exemplos: exemplos.slice(0, 10)
   }, null, 2));
 

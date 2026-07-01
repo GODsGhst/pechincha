@@ -141,7 +141,12 @@ export default function SearchScreen({ route, navigation }) {
     const seq = ++requisicaoFiltros.current;
     try {
       const query = montarQuery({ categoria, tipo, marca, quantidade });
-      const resposta = await api.get(`/produtos/filtros${query}`, { timeoutMs: 20000, cacheMs: 120000 });
+      const resposta = await api.get(`/produtos/filtros${query}`, {
+        timeoutMs: 20000,
+        cacheMs: 10 * 60 * 1000,
+        preferStale: true,
+        maxStaleMs: 24 * 60 * 60 * 1000
+      });
       if (seq === requisicaoFiltros.current) {
         setFiltros({
           categorias: resposta.categorias || [],
@@ -149,6 +154,19 @@ export default function SearchScreen({ route, navigation }) {
           marcas: resposta.marcas || [],
           quantidades: resposta.quantidades || [],
         });
+        if (resposta._meta?.stale) {
+          api.get(`/produtos/filtros${query}`, { timeoutMs: 20000, cacheMs: 10 * 60 * 1000, forceRefresh: true })
+            .then((atualizado) => {
+              if (seq !== requisicaoFiltros.current) return;
+              setFiltros({
+                categorias: atualizado.categorias || [],
+                tipos: atualizado.tipos || [],
+                marcas: atualizado.marcas || [],
+                quantidades: atualizado.quantidades || [],
+              });
+            })
+            .catch(() => {});
+        }
       }
     } catch (_e) {
       if (seq === requisicaoFiltros.current) {
@@ -174,7 +192,12 @@ export default function SearchScreen({ route, navigation }) {
     setCarregando(true);
     try {
       const query = montarQuery({ termo: termoLimpo, categoria, tipo, marca, quantidade });
-      const resposta = await api.get(`/produtos${query}`, { timeoutMs: 20000, cacheMs: 30000 });
+      const resposta = await api.get(`/produtos${query}`, {
+        timeoutMs: 20000,
+        cacheMs: 2 * 60 * 1000,
+        preferStale: true,
+        maxStaleMs: 6 * 60 * 60 * 1000
+      });
       if (seq !== requisicaoBusca.current) return;
 
       const lista = resposta.produtos || [];
@@ -183,6 +206,17 @@ export default function SearchScreen({ route, navigation }) {
       setOfflineCache(Boolean(resposta._meta?.offline));
       if (termoLimpo.length >= 2 && lista.length > 0) {
         salvarBuscaRecente(termoLimpo).then(setBuscasRecentes);
+      }
+      if (resposta._meta?.stale) {
+        api.get(`/produtos${query}`, { timeoutMs: 20000, cacheMs: 2 * 60 * 1000, forceRefresh: true })
+          .then((atualizado) => {
+            if (seq !== requisicaoBusca.current) return;
+            const atualizada = atualizado.produtos || [];
+            setResultados(atualizada);
+            setSugestoes(termoLimpo.length >= 2 ? atualizada.slice(0, 8) : []);
+            setOfflineCache(Boolean(atualizado._meta?.offline));
+          })
+          .catch(() => {});
       }
     } catch (_e) {
       if (seq === requisicaoBusca.current) {
@@ -339,7 +373,7 @@ export default function SearchScreen({ route, navigation }) {
               <Pressable
                 key={`sug-${item.id}`}
                 style={styles.sugestao}
-                onPress={() => navigation.navigate('Product', { id: item.id, nome: item.nome })}
+                onPress={() => navigation.navigate('Product', { id: item.id, nome: item.nome, produto: item })}
               >
                 <ProductImage uri={item.imagem_url} style={styles.sugestaoImg} iconSize={14} />
                 <View style={{ minWidth: 0 }}>
@@ -381,7 +415,7 @@ export default function SearchScreen({ route, navigation }) {
             const precoUnidade = formatPrecoUnidade(item.preco_unidade);
             const idadePreco = rotuloConfiancaPreco(item.confianca_preco || item.ultimo_preco?.confianca_preco);
             return (
-              <Pressable style={styles.linha} onPress={() => navigation.navigate('Product', { id: item.id, nome: item.nome })}>
+              <Pressable style={styles.linha} onPress={() => navigation.navigate('Product', { id: item.id, nome: item.nome, produto: item })}>
                 <ProductImage uri={item.imagem_url} style={styles.linhaImg} iconSize={20} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.linhaNome} numberOfLines={2}>{item.nome}</Text>

@@ -31,11 +31,21 @@ export default function HomeScreen({ navigation }) {
     if (manual) setAtualizando(true);
     try {
       const resposta = await api.get('/produtos/menores?limite=6', {
-        cacheMs: 30000,
-        forceRefresh: manual
+        cacheMs: 2 * 60 * 1000,
+        forceRefresh: manual,
+        preferStale: !manual,
+        maxStaleMs: 6 * 60 * 60 * 1000
       });
       setItens(resposta.menores_precos || []);
       setOfflineCache(Boolean(resposta._meta?.offline));
+      if (!manual && resposta._meta?.stale) {
+        api.get('/produtos/menores?limite=6', { cacheMs: 2 * 60 * 1000, forceRefresh: true })
+          .then((atualizado) => {
+            setItens(atualizado.menores_precos || []);
+            setOfflineCache(Boolean(atualizado._meta?.offline));
+          })
+          .catch(() => {});
+      }
     } catch (_e) {
       setItens([]);
       setOfflineCache(false);
@@ -115,7 +125,26 @@ export default function HomeScreen({ navigation }) {
               <Pressable
                 key={it.produto_id}
                 style={styles.card}
-                onPress={() => navigation.navigate('Product', { id: it.produto_id, nome: it.produto })}
+                onPress={() => navigation.navigate('Product', {
+                  id: it.produto_id,
+                  nome: it.produto,
+                  produto: {
+                    id: it.produto_id,
+                    nome: it.produto,
+                    categoria: it.categoria,
+                    tipo: it.tipo,
+                    marca: it.marca,
+                    quantidade: it.quantidade,
+                    imagem_url: it.imagem_url,
+                    imagem_credito: it.imagem_credito,
+                    menor_preco: it.valor,
+                    preco_unidade: it.preco_unidade,
+                    confianca_preco: it.confianca_preco,
+                    estabelecimento: it.estabelecimento,
+                    data: it.data,
+                    valor: it.valor
+                  }
+                })}
               >
                 <ProductImage uri={it.imagem_url} style={styles.cardImg} iconSize={26} />
                 <Text style={styles.cardNome} numberOfLines={2}>{it.produto}</Text>

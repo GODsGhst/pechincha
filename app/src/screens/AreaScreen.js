@@ -211,11 +211,22 @@ export default function AreaScreen({ navigation }) {
         ? `?lat=${encodeURIComponent(localizacao.lat)}&lng=${encodeURIComponent(localizacao.lng)}&raio=${encodeURIComponent(distancia)}`
         : '';
       const res = await api.get(`/estabelecimentos/mapa${query}`, {
-        cacheMs: 30000,
+        cacheMs: 2 * 60 * 1000,
         forceRefresh: manual,
-        timeoutMs: 20000
+        timeoutMs: 20000,
+        preferStale: !manual,
+        maxStaleMs: 6 * 60 * 60 * 1000
       });
       setEstabelecimentos(res.estabelecimentos || []);
+      if (!manual && res._meta?.stale) {
+        api.get(`/estabelecimentos/mapa${query}`, {
+          cacheMs: 2 * 60 * 1000,
+          forceRefresh: true,
+          timeoutMs: 20000
+        })
+          .then((atualizado) => setEstabelecimentos(atualizado.estabelecimentos || []))
+          .catch(() => {});
+      }
     } catch (_e) {
       setErro('Não foi possível carregar as lojas próximas.');
     } finally {

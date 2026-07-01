@@ -14,12 +14,46 @@ function dataCurta(data) {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function produtoInicial(params = {}) {
+  const resumo = params.produto || null;
+  if (!resumo && !params.nome) return null;
+
+  const valor = resumo?.menor_preco ?? resumo?.valor ?? null;
+  const ultimo = resumo?.ultimo_preco || (resumo?.estabelecimento || resumo?.data
+    ? {
+        valor,
+        data: resumo?.data || null,
+        estabelecimento: resumo?.estabelecimento || null,
+        preco_unidade: resumo?.preco_unidade || null,
+        confianca_preco: resumo?.confianca_preco || null
+      }
+    : null);
+
+  return {
+    id: params.id || resumo?.id || resumo?.produto_id,
+    nome: resumo?.nome || resumo?.produto || params.nome || 'Produto',
+    categoria: resumo?.categoria || null,
+    tipo: resumo?.tipo || null,
+    marca: resumo?.marca || null,
+    quantidade: resumo?.quantidade || resumo?.quantidade_produto || null,
+    imagem_url: resumo?.imagem_url || null,
+    imagem_credito: resumo?.imagem_credito || null,
+    menor_preco: valor,
+    preco_unidade: resumo?.preco_unidade || null,
+    confianca_preco: resumo?.confianca_preco || null,
+    ultimo_preco_info: ultimo,
+    estatisticas: null,
+    historico: []
+  };
+}
+
 function PriceHistoryChart({ historico }) {
+  const [largura, setLargura] = useState(0);
   const pontos = useMemo(() => (
     [...(historico || [])]
       .filter((item) => Number.isFinite(Number(item.valor)))
       .sort((a, b) => new Date(a.data || 0) - new Date(b.data || 0))
-      .slice(-10)
+      .slice(-12)
   ), [historico]);
 
   if (!pontos.length) {
@@ -30,35 +64,78 @@ function PriceHistoryChart({ historico }) {
   const menor = Math.min(...valores);
   const maior = Math.max(...valores);
   const faixa = Math.max(maior - menor, 0.01);
+  const altura = 112;
+  const padding = 14;
+  const larguraUtil = Math.max(largura - padding * 2, 1);
+  const alturaUtil = altura - padding * 2;
+  const coords = largura > 0
+    ? pontos.map((ponto, index) => ({
+        x: padding + (pontos.length === 1 ? larguraUtil / 2 : (index / (pontos.length - 1)) * larguraUtil),
+        y: padding + (1 - ((Number(ponto.valor) - menor) / faixa)) * alturaUtil,
+        ponto
+      }))
+    : [];
+  const segmentos = coords.slice(1).map((coord, index) => {
+    const anterior = coords[index];
+    const dx = coord.x - anterior.x;
+    const dy = coord.y - anterior.y;
+    return {
+      key: `${coord.ponto.data || index}-${coord.ponto.valor}`,
+      left: anterior.x,
+      top: anterior.y,
+      width: Math.sqrt(dx * dx + dy * dy),
+      angle: Math.atan2(dy, dx)
+    };
+  });
 
   return (
     <View style={styles.graficoCard}>
       <View style={styles.graficoTopo}>
         <View>
-          <Text style={styles.graficoTitulo}>Histórico geral</Text>
+          <Text style={styles.graficoTitulo}>Evolução do preço</Text>
           <Text style={styles.graficoSubtitulo}>últimos {pontos.length} registros</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.graficoPreco}>{formatBRL(menor)}</Text>
-          <Text style={styles.graficoSubtitulo}>menor</Text>
+          <Text style={styles.graficoPreco}>{formatBRL(maior)}</Text>
+          <Text style={styles.graficoSubtitulo}>maior</Text>
         </View>
       </View>
-      <View style={styles.graficoArea}>
-        {pontos.map((ponto, index) => {
-          const altura = 18 + ((Number(ponto.valor) - menor) / faixa) * 72;
+      <View style={styles.graficoLinhaArea} onLayout={(e) => setLargura(e.nativeEvent.layout.width)}>
+        <View style={[styles.graficoGrade, { top: padding }]} />
+        <View style={[styles.graficoGrade, { top: altura / 2 }]} />
+        <View style={[styles.graficoGrade, { bottom: padding }]} />
+        {segmentos.map((segmento) => (
+          <View
+            key={segmento.key}
+            style={[
+              styles.graficoSegmento,
+              {
+                left: segmento.left,
+                top: segmento.top,
+                width: segmento.width,
+                transform: [{ rotateZ: `${segmento.angle}rad` }]
+              }
+            ]}
+          />
+        ))}
+        {coords.map(({ x, y, ponto }, index) => {
           const melhor = Number(ponto.valor) === menor;
           return (
-            <View key={`${ponto.data || index}-${ponto.valor}-${index}`} style={styles.graficoColuna}>
-              <Text style={[styles.graficoValor, melhor && { color: colors.brandDark }]} numberOfLines={1}>
-                {formatBRL(ponto.valor).replace('R$', '').trim()}
-              </Text>
-              <View style={styles.graficoBarraBox}>
-                <View style={[styles.graficoBarra, melhor && styles.graficoBarraMelhor, { height: altura }]} />
-              </View>
-              <Text style={styles.graficoData} numberOfLines={1}>{dataCurta(ponto.data)}</Text>
+            <View key={`${ponto.data || index}-${ponto.valor}-${index}`}>
+              <View style={[styles.graficoPonto, melhor && styles.graficoPontoMelhor, { left: x - 5, top: y - 5 }]} />
+              {(index === 0 || index === coords.length - 1 || melhor) && (
+                <Text style={[styles.graficoValorLinha, { left: Math.max(2, Math.min(x - 28, largura - 56)), top: Math.max(0, y - 26) }]}>
+                  {formatBRL(ponto.valor).replace('R$', '').trim()}
+                </Text>
+              )}
             </View>
           );
         })}
+      </View>
+      <View style={styles.graficoLegenda}>
+        <Text style={styles.graficoData}>{dataCurta(pontos[0].data)}</Text>
+        <Text style={styles.graficoData}>{formatBRL(menor)} menor</Text>
+        <Text style={styles.graficoData}>{dataCurta(pontos[pontos.length - 1].data)}</Text>
       </View>
     </View>
   );
@@ -67,11 +144,13 @@ function PriceHistoryChart({ historico }) {
 export default function ProductScreen({ route, navigation }) {
   const { id, nome } = route.params;
   const { adicionar, contem } = useCart();
-  const [produto, setProduto] = useState(null);
-  const [carregando, setCarregando] = useState(true);
+  const inicial = useMemo(() => produtoInicial(route.params), [route.params]);
+  const [produto, setProduto] = useState(inicial);
+  const [carregando, setCarregando] = useState(!inicial);
   const [atualizando, setAtualizando] = useState(false);
   const [aba, setAba] = useState('locais');
   const [offlineCache, setOfflineCache] = useState(false);
+  const historico = produto?.historico || [];
   const naLista = contem(id);
   const estatisticaGeral = produto?.estatisticas?.geral || {};
   const mediasPorLocal = produto?.estatisticas?.por_estabelecimento || [];
@@ -81,15 +160,26 @@ export default function ProductScreen({ route, navigation }) {
 
   async function carregarProduto(manual = false) {
     if (manual) setAtualizando(true);
+    else if (!produto) setCarregando(true);
     try {
       const resposta = await api.get(`/produtos/${id}`, {
-        cacheMs: 30000,
-        forceRefresh: manual
+        cacheMs: 5 * 60 * 1000,
+        forceRefresh: manual,
+        preferStale: !manual,
+        maxStaleMs: 24 * 60 * 60 * 1000
       });
       setProduto(resposta);
       setOfflineCache(Boolean(resposta._meta?.offline));
+      if (!manual && resposta._meta?.stale) {
+        api.get(`/produtos/${id}`, { cacheMs: 5 * 60 * 1000, forceRefresh: true })
+          .then((atualizado) => {
+            setProduto(atualizado);
+            setOfflineCache(Boolean(atualizado._meta?.offline));
+          })
+          .catch(() => {});
+      }
     } catch (_e) {
-      setProduto(null);
+      if (!produto) setProduto(null);
       setOfflineCache(false);
     } finally {
       setCarregando(false);
@@ -230,28 +320,27 @@ export default function ProductScreen({ route, navigation }) {
           ) : (
             <>
               <Text style={styles.secao}>Histórico de preços</Text>
-              <PriceHistoryChart historico={produto.historico} />
-              {produto.historico.length === 0 ? (
+              <PriceHistoryChart historico={historico} />
+              {historico.length === 0 ? (
                 <Text style={styles.vazio}>Sem registros ainda.</Text>
               ) : (
-                produto.historico.map((h, i) => {
-                  const melhor = h.valor === produto.menor_preco;
-                  return (
-                    <View key={i} style={[styles.row, melhor && styles.rowMelhor]}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.rowValor, melhor && { color: colors.brandDark }]}>{formatBRL(h.valor)}</Text>
-                        <Text style={styles.rowLocal} numberOfLines={1}>
-                          {h.estabelecimento || 'Local não identificado'} · {tempoRelativo(h.data)}
-                        </Text>
+                <View style={styles.tabelaHistorico}>
+                  <View style={styles.tabelaHeader}>
+                    <Text style={[styles.tabelaHeaderTexto, { flex: 0.8 }]}>Preço</Text>
+                    <Text style={[styles.tabelaHeaderTexto, { flex: 1.4 }]}>Local</Text>
+                    <Text style={[styles.tabelaHeaderTexto, { flex: 0.8, textAlign: 'right' }]}>Quando</Text>
+                  </View>
+                  {historico.map((h, i) => {
+                    const melhor = h.valor === produto.menor_preco;
+                    return (
+                      <View key={`${h.data || i}-${h.valor}-${h.estabelecimento || 'local'}`} style={[styles.tabelaRow, melhor && styles.tabelaRowMelhor]}>
+                        <Text style={[styles.tabelaValor, melhor && { color: colors.brandDark }]}>{formatBRL(h.valor)}</Text>
+                        <Text style={styles.tabelaLocal} numberOfLines={1}>{h.estabelecimento || 'Local não identificado'}</Text>
+                        <Text style={styles.tabelaData} numberOfLines={1}>{tempoRelativo(h.data)}</Text>
                       </View>
-                      {melhor ? (
-                        <View style={styles.tagMelhor}><Text style={styles.tagMelhorTexto}>melhor</Text></View>
-                      ) : (
-                        <Ionicons name="location-outline" size={18} color={colors.location} />
-                      )}
-                    </View>
-                  );
-                })
+                    );
+                  })}
+                </View>
               )}
             </>
           )}
@@ -302,23 +391,26 @@ const styles = StyleSheet.create({
   graficoTitulo: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },
   graficoSubtitulo: { fontFamily: fonts.body, fontSize: 10.5, color: colors.inkMuted, marginTop: 2 },
   graficoPreco: { fontFamily: fonts.monoMedium, fontSize: 14, color: colors.brandDark },
-  graficoArea: { height: 142, flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 12 },
-  graficoColuna: { flex: 1, minWidth: 24, alignItems: 'center' },
-  graficoValor: { fontFamily: fonts.monoMedium, fontSize: 9.5, color: colors.inkSoft, marginBottom: 4 },
-  graficoBarraBox: { height: 90, justifyContent: 'flex-end', width: '100%', alignItems: 'center' },
-  graficoBarra: { width: '62%', minWidth: 8, borderRadius: radius.pill, backgroundColor: '#C9D8D0' },
-  graficoBarraMelhor: { backgroundColor: colors.brand },
-  graficoData: { fontFamily: fonts.body, fontSize: 9, color: colors.inkMuted, marginTop: 5 },
+  graficoLinhaArea: { height: 112, marginTop: 12, borderRadius: radius.md, backgroundColor: '#F6F8F4', overflow: 'hidden' },
+  graficoGrade: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: '#E3E9E0' },
+  graficoSegmento: { position: 'absolute', height: 2, borderRadius: 1, backgroundColor: colors.brand },
+  graficoPonto: { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.brand },
+  graficoPontoMelhor: { backgroundColor: colors.brand, borderColor: colors.brandDark },
+  graficoValorLinha: { position: 'absolute', width: 56, textAlign: 'center', fontFamily: fonts.monoMedium, fontSize: 9.5, color: colors.brandDark },
+  graficoLegenda: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  graficoData: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted },
   mediasLista: { gap: 8, marginBottom: 10 },
   mediaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 11 },
   mediaLocal: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },
   mediaMeta: { fontFamily: fonts.body, fontSize: 11.5, color: colors.inkSoft, marginTop: 2 },
   mediaUltimo: { fontFamily: fonts.monoMedium, fontSize: 13, color: colors.brandDark },
-  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 12, marginBottom: 8 },
-  rowMelhor: { backgroundColor: colors.brandSoft, borderColor: colors.brandSoftLine },
-  rowValor: { fontFamily: fonts.monoMedium, fontSize: 16, color: colors.ink },
-  rowLocal: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft, marginTop: 2 },
-  tagMelhor: { backgroundColor: colors.brand, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3 },
-  tagMelhorTexto: { fontFamily: fonts.semibold, fontSize: 11, color: colors.white },
+  tabelaHistorico: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, overflow: 'hidden' },
+  tabelaHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F6F8F4', paddingHorizontal: 12, height: 34 },
+  tabelaHeaderTexto: { fontFamily: fonts.semibold, fontSize: 10.5, color: colors.inkMuted },
+  tabelaRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: colors.line },
+  tabelaRowMelhor: { backgroundColor: colors.brandSoft },
+  tabelaValor: { flex: 0.8, fontFamily: fonts.monoMedium, fontSize: 13, color: colors.ink },
+  tabelaLocal: { flex: 1.4, fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft },
+  tabelaData: { flex: 0.8, fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted, textAlign: 'right' },
   vazio: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft, textAlign: 'center', marginTop: 24 },
 });

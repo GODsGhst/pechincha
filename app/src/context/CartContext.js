@@ -74,10 +74,18 @@ export function CartProvider({ children }) {
     setCarregando(true);
     setErro(null);
     try {
-      const lista = aplicarLista(await api.get('/lista', {
-        cacheMs: 30000,
-        forceRefresh: manual
-      }));
+      const resposta = await api.get('/lista', {
+        cacheMs: 2 * 60 * 1000,
+        forceRefresh: manual,
+        preferStale: !manual,
+        maxStaleMs: 24 * 60 * 60 * 1000
+      });
+      const lista = aplicarLista(resposta);
+      if (!manual && resposta?._meta?.stale) {
+        api.get('/lista', { cacheMs: 2 * 60 * 1000, forceRefresh: true })
+          .then(aplicarLista)
+          .catch(() => {});
+      }
       if (manual) sincronizarFila();
       return lista;
     } catch (_e) {
@@ -154,7 +162,7 @@ export function CartProvider({ children }) {
         await salvarFila(fila);
       }
 
-      const lista = await api.get('/lista', { cacheMs: 30000, forceRefresh: true });
+      const lista = await api.get('/lista', { cacheMs: 2 * 60 * 1000, forceRefresh: true });
       aplicarLista(lista);
       setErro(null);
     } catch (_e) {

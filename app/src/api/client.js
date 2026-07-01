@@ -134,10 +134,15 @@ function limparCacheGet({ incluirPersistente = false, incluirPrivadoPersistente 
   }
 }
 
-function obterCacheGetItem(chave, aceitarExpirado = false) {
+function obterCacheGetItem(chave, aceitarExpirado = false, maxStaleMs = null) {
   const item = cacheGet.get(chave);
   if (!item) return null;
-  if (!aceitarExpirado && Date.now() > item.expiraEm) {
+  const agora = Date.now();
+  const expirado = agora > item.expiraEm;
+  if (!aceitarExpirado && expirado) {
+    return null;
+  }
+  if (aceitarExpirado && expirado && Number.isFinite(Number(maxStaleMs)) && agora > item.expiraEm + Number(maxStaleMs)) {
     return null;
   }
   return item;
@@ -185,6 +190,13 @@ async function request(metodo, caminho, corpo, opcoes = {}) {
   if (cacheKey && !forcarRede) {
     const cached = obterCacheGetItem(cacheKey);
     if (cached) return cached.valor;
+
+    if (opcoes.preferStale) {
+      const stale = obterCacheGetItem(cacheKey, true, opcoes.maxStaleMs || 24 * 60 * 60 * 1000);
+      if (stale) {
+        return comMetaCache(stale.valor, stale, { stale: true });
+      }
+    }
   }
 
   const podeReaproveitar = chaveGet && !forcarRede;

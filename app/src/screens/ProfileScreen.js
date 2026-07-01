@@ -54,11 +54,21 @@ export default function ProfileScreen({ navigation }) {
     if (manual) setAtualizando(true);
     try {
       const resposta = await api.get('/compras', {
-        cacheMs: 30000,
-        forceRefresh: manual
+        cacheMs: 2 * 60 * 1000,
+        forceRefresh: manual,
+        preferStale: !manual,
+        maxStaleMs: 24 * 60 * 60 * 1000
       });
       setCompras(resposta.compras || []);
       setOfflineCache(Boolean(resposta._meta?.offline));
+      if (!manual && resposta._meta?.stale) {
+        api.get('/compras', { cacheMs: 2 * 60 * 1000, forceRefresh: true })
+          .then((atualizado) => {
+            setCompras(atualizado.compras || []);
+            setOfflineCache(Boolean(atualizado._meta?.offline));
+          })
+          .catch(() => {});
+      }
     } catch (_e) {
       setCompras([]);
       setOfflineCache(false);
@@ -173,6 +183,7 @@ export default function ProfileScreen({ navigation }) {
         <View style={{ flex: 1 }}>
           <Text style={styles.privacidadeTitulo}>Privacidade</Text>
           <Text style={styles.privacidadeTexto}>Seu login fica no armazenamento seguro do aparelho. Suas notas ficam no servidor vinculadas à sua conta.</Text>
+          <Text style={styles.privacidadeTexto}>A exportação baixa um JSON com seus dados pessoais, compras, importações NFC-e e lista de compras.</Text>
         </View>
       </View>
 
@@ -182,7 +193,7 @@ export default function ProfileScreen({ navigation }) {
         ) : (
           <Ionicons name="download-outline" size={18} color={colors.brandDark} />
         )}
-        <Text style={styles.exportarTexto}>{exportando ? 'Exportando dados' : 'Exportar meus dados'}</Text>
+        <Text style={styles.exportarTexto}>{exportando ? 'Exportando dados' : 'Baixar meus dados (JSON)'}</Text>
       </Pressable>
 
       <Text style={styles.secao}>Seu histórico</Text>

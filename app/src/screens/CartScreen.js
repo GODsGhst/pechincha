@@ -209,7 +209,7 @@ export default function CartScreen({ navigation }) {
               {!!formatPrecoUnidade(item.preco_unidade) && (
                 <Text style={styles.cardPrecoUnidade}>{formatPrecoUnidade(item.preco_unidade)}</Text>
               )}
-              <Pressable style={styles.analisar} onPress={() => navigation.navigate('Product', { id: item.id, nome: item.nome })}>
+              <Pressable style={styles.analisar} onPress={() => navigation.navigate('Product', { id: item.id, nome: item.nome, produto: item })}>
                 <Ionicons name="search" size={13} color={colors.brand} />
                 <Text style={styles.analisarTexto}>Analisar produto</Text>
               </Pressable>

@@ -12,6 +12,7 @@ const historicoPrecoSchema = new mongoose.Schema({
 historicoPrecoSchema.index({ produto_id: 1, estabelecimento_id: 1, compra_id: 1, valor: 1 });
 historicoPrecoSchema.index({ produto_id: 1, estabelecimento_id: 1, valor: 1 });
 historicoPrecoSchema.index({ produto_id: 1, valor: 1, data: -1 });
+historicoPrecoSchema.index({ produto_id: 1, data: -1 });
 historicoPrecoSchema.index({ estabelecimento_id: 1, produto_id: 1, data: -1 });
 
 module.exports = mongoose.model('HistoricoPreco', historicoPrecoSchema);

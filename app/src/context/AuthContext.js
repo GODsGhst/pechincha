@@ -17,6 +17,7 @@ export function AuthProvider({ children }) {
   // Ao abrir o app, tenta recuperar uma sessão salva
   useEffect(() => {
     (async () => {
+      let liberouSessaoLocal = false;
       try {
         const token = await SecureStore.getItemAsync(TOKEN_KEY);
         if (token) {
@@ -26,6 +27,8 @@ export function AuthProvider({ children }) {
             const usuarioSalvo = JSON.parse(dados);
             setCacheOwner(usuarioSalvo?.id);
             setUsuario(usuarioSalvo);
+            liberouSessaoLocal = true;
+            setCarregando(false);
           }
 
           try {
@@ -47,7 +50,7 @@ export function AuthProvider({ children }) {
       } catch (_e) {
         // sessão inválida — segue deslogado
       } finally {
-        setCarregando(false);
+        if (!liberouSessaoLocal) setCarregando(false);
       }
     })();
   }, []);

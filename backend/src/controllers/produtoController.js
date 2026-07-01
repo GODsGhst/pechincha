@@ -11,6 +11,8 @@ const { registrarAdminAudit } = require('../services/adminAuditService');
 const CACHE_TTL_MS = 20 * 1000;
 const CACHE_MAX = 120;
 const LIMITE_FALLBACK_FILTROS = 1000;
+const HISTORICO_DETALHE_PADRAO = 80;
+const HISTORICO_DETALHE_MAX = 200;
 
 function escapeRegex(texto) {
   return texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -765,9 +767,14 @@ async function detalhar(req, res, next) {
 
     const idsCanonicos = await idsProdutosDuplicadosCanonicos(produto);
     const produtosCanonicos = await Produto.find({ _id: { $in: idsCanonicos } });
+    const limiteHistorico = Math.min(
+      Math.max(Number(req.query.historico_limite) || HISTORICO_DETALHE_PADRAO, 1),
+      HISTORICO_DETALHE_MAX
+    );
     const [historico, estatisticas] = await Promise.all([
       HistoricoPreco.find({ produto_id: { $in: idsCanonicos } })
         .sort({ data: -1 })
+        .limit(limiteHistorico)
         .populate('estabelecimento_id', 'nome'),
       estatisticasPreco(idsCanonicos)
     ]);
