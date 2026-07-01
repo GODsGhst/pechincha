@@ -36,9 +36,9 @@ npm start
 | `MONGODB_URI` | String de conexão do MongoDB | `mongodb://localhost:27017/comparador_precos` |
 | `JWT_SECRET` | Chave de assinatura dos tokens | — (obrigatória) |
 | `JWT_EXPIRES_IN` | Expiração do token | `7d` |
-| `CORS_ORIGIN` | Origens permitidas em produção (separadas por vírgula) | todas |
-| `PASSWORD_RESET_BASE_URL` | URL usada para montar link de redefinição de senha | — |
-| `PASSWORD_RESET_EXPOSE_TOKEN` | Expor token de reset no JSON (somente dev/teste) | `false` |
+| `CORS_ORIGIN` | Origens permitidas (separadas por vírgula). Em produção, só URLs HTTPS explícitas | lista local/dev |
+| `PASSWORD_RESET_BASE_URL` | URL usada para montar link de redefinição de senha. Em produção, deve ser HTTPS | — |
+| `PASSWORD_RESET_EXPOSE_TOKEN` | Expor token de reset no JSON (somente dev/teste; bloqueado em produção) | `true` em dev |
 | `SMTP_HOST` | Host SMTP para enviar e-mail de recuperação | — |
 | `SMTP_PORT` | Porta SMTP | `587` |
 | `SMTP_SECURE` | `true` para SMTP com TLS direto | `false` |
@@ -65,6 +65,11 @@ após tentativas repetidas de senha. A recuperação de senha salva apenas o has
 do token temporário no banco e envia as instruções por e-mail quando o SMTP está
 configurado. Em desenvolvimento/teste o token pode voltar no JSON para facilitar
 a apresentação; em produção não exponha esse token.
+
+Em produção, a API não inicia se faltar configuração crítica: `MONGODB_URI`,
+`JWT_SECRET` forte, `CORS_ORIGIN` HTTPS, `PASSWORD_RESET_BASE_URL` HTTPS e SMTP
+completo (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`). Isso impede publicar o reset
+de senha sem envio de e-mail real ou com configuração de desenvolvimento.
 
 ### NFC-e
 | Método | Rota | Auth |

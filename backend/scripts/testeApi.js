@@ -89,6 +89,7 @@ async function main() {
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'segredo_de_teste';
   process.env.CORS_ORIGIN = 'https://pechincha-web.onrender.com';
 
+  const { validarAmbiente } = require('../src/config/env');
   const app = require('../src/app');
   const connectDB = require('../src/config/database');
   const Usuario = require('../src/models/Usuario');
@@ -123,6 +124,59 @@ async function main() {
   };
 
   console.log('\n--- Autenticação ---');
+  const ambienteBaseProducao = {
+    NODE_ENV: 'production',
+    MONGODB_URI: 'mongodb://localhost:27017/producao_teste',
+    JWT_SECRET: 'segredo-de-producao-com-mais-de-32-caracteres',
+    CORS_ORIGIN: 'https://pechincha-web.onrender.com',
+    PASSWORD_RESET_BASE_URL: 'https://pechincha-web.onrender.com',
+    SMTP_HOST: 'smtp.example.com',
+    SMTP_PORT: '587',
+    SMTP_USER: 'mailer@example.com',
+    SMTP_PASS: 'token-smtp'
+  };
+
+  function comAmbienteTemporario(variaveis, fn) {
+    const chaves = Object.keys(variaveis);
+    const anterior = {};
+    for (const chave of chaves) {
+      anterior[chave] = process.env[chave];
+      if (variaveis[chave] === undefined) delete process.env[chave];
+      else process.env[chave] = variaveis[chave];
+    }
+    try {
+      fn();
+    } finally {
+      for (const chave of chaves) {
+        if (anterior[chave] === undefined) delete process.env[chave];
+        else process.env[chave] = anterior[chave];
+      }
+    }
+  }
+
+  function ambienteFalha(variaveis, trechoErro) {
+    let falhouComoEsperado = false;
+    comAmbienteTemporario(variaveis, () => {
+      try {
+        validarAmbiente();
+      } catch (err) {
+        falhouComoEsperado = String(err.message || '').includes(trechoErro);
+      }
+    });
+    return falhouComoEsperado;
+  }
+
+  comAmbienteTemporario(ambienteBaseProducao, () => validarAmbiente());
+  verificar(true, 'ambiente de produção válido passa nas travas obrigatórias');
+  verificar(ambienteFalha({ ...ambienteBaseProducao, SMTP_PASS: '' }, 'SMTP_HOST'),
+    'produção exige SMTP para recuperação de senha');
+  verificar(ambienteFalha({ ...ambienteBaseProducao, PASSWORD_RESET_EXPOSE_TOKEN: 'true' }, 'PASSWORD_RESET_EXPOSE_TOKEN'),
+    'produção bloqueia exposição de token de reset');
+  verificar(ambienteFalha({ ...ambienteBaseProducao, PASSWORD_RESET_BASE_URL: 'http://pechincha-web.onrender.com' }, 'PASSWORD_RESET_BASE_URL'),
+    'produção exige URL HTTPS para reset');
+  verificar(ambienteFalha({ ...ambienteBaseProducao, CORS_ORIGIN: 'http://localhost:5173' }, 'CORS_ORIGIN'),
+    'produção exige CORS com origem HTTPS explícita');
+
   const corsPermitido = await req('GET', '/produtos', null, null, { Origin: 'https://pechincha-web.onrender.com' });
   verificar(corsPermitido.status === 200 &&
     corsPermitido.headers.get('access-control-allow-origin') === 'https://pechincha-web.onrender.com',

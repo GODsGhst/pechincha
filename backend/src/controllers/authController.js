@@ -57,7 +57,7 @@ function compararHexSeguro(a, b) {
 }
 
 function resetDevHabilitado() {
-  return process.env.NODE_ENV !== 'production' || process.env.PASSWORD_RESET_EXPOSE_TOKEN === 'true';
+  return process.env.NODE_ENV !== 'production' && process.env.PASSWORD_RESET_EXPOSE_TOKEN !== 'false';
 }
 
 function entregaResetDisponivel() {
