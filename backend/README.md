@@ -52,6 +52,14 @@ npm start
 
 ## Endpoints
 
+### Operação
+| Método | Rota | Auth |
+|---|---|---|
+| GET | `/health` | Não |
+
+`/health` retorna `200` quando a API está rodando e o MongoDB está conectado.
+O deploy usa essa rota para health check.
+
 ### Autenticação
 | Método | Rota | Auth |
 |---|---|---|

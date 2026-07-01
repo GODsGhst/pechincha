@@ -125,6 +125,13 @@ async function main() {
   };
 
   console.log('\n--- Autenticação ---');
+  const health = await fetch(`http://localhost:${PORTA}/health`);
+  const healthJson = await health.json();
+  verificar(health.status === 200 &&
+    healthJson.status === 'ok' &&
+    healthJson.database === 'connected',
+    'health check confirma API e Mongo conectados');
+
   const ambienteBaseProducao = {
     NODE_ENV: 'production',
     MONGODB_URI: 'mongodb://localhost:27017/producao_teste',

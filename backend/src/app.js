@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 
 const authRoutes = require('./routes/authRoutes');
 const produtoRoutes = require('./routes/produtoRoutes');
@@ -84,6 +85,16 @@ app.use((req, res, next) => {
 
 app.get('/', (_req, res) => {
   res.json({ message: 'API do Comparador de Preços por Cupons Fiscais', versao: '1.0.0' });
+});
+
+app.get('/health', (_req, res) => {
+  const conectado = mongoose.connection.readyState === 1;
+  res.status(conectado ? 200 : 503).json({
+    status: conectado ? 'ok' : 'degraded',
+    database: conectado ? 'connected' : 'disconnected',
+    uptime_seconds: Math.round(process.uptime()),
+    timestamp: new Date().toISOString()
+  });
 });
 
 app.use('/api', rateLimit({
