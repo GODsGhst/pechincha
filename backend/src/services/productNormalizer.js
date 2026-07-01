@@ -23,6 +23,10 @@ const TOKENS_GENERICOS = new Set([
   'kg', 'g', 'grama', 'gramas', 'quilo', 'quilos'
 ]);
 
+const TOKENS_FABRICANTE = new Set([
+  'mdlz', 'mondelez', 'mondelezbr', 'mondelezbrasil', 'kraft'
+]);
+
 const CATEGORIAS = [
   { categoria: 'Alimentos', aliases: ['alimento', 'alimentos', 'mercearia'] },
   { categoria: 'Bebidas', aliases: ['bebida', 'bebidas'] },
@@ -155,6 +159,16 @@ const MARCAS = [
   { marca: 'Brilhalumínio', aliases: ['brilhaluminio', 'brilha aluminio', 'brilha alumínio'] },
   { marca: 'Uau', aliases: ['uau'] }
 ];
+
+const TIPO_PADRAO_POR_MARCA = new Map([
+  ['Halls', 'Bala'],
+  ['Trident', 'Goma'],
+  ['Gatorade', 'Isotônico'],
+  ['Oreo', 'Biscoito'],
+  ['Nutella', 'Chocolate'],
+  ['Lacta', 'Chocolate'],
+  ['Garoto', 'Chocolate']
+]);
 
 function normalizarTexto(texto) {
   return (texto || '')
@@ -345,7 +359,8 @@ function montarExtras(tokens, marcaInfo, tipoInfo) {
   const ignorar = new Set([
     ...tokensDosAliases(marcaInfo),
     ...tokensDosAliases(tipoInfo),
-    ...CATEGORIAS.flatMap((c) => c.aliases.flatMap((a) => tokenizar(a)))
+    ...CATEGORIAS.flatMap((c) => c.aliases.flatMap((a) => tokenizar(a))),
+    ...TOKENS_FABRICANTE
   ]);
 
   if (tokens.includes('ao') && tokens.includes('leite')) {
@@ -396,6 +411,9 @@ function analisarProduto(nomeBruto, sobrescritas = {}) {
 
   if (!tipoInfo && marcaInfo && ['Coca-Cola', 'Pepsi', 'Fanta', 'Sprite', 'Guaraná Antarctica'].includes(marcaInfo.marca)) {
     tipoInfo = TIPOS.find((entrada) => entrada.tipo === 'Refrigerante');
+  }
+  if (!tipoInfo && marcaInfo && TIPO_PADRAO_POR_MARCA.has(marcaInfo.marca)) {
+    tipoInfo = tipoPorNome(TIPO_PADRAO_POR_MARCA.get(marcaInfo.marca));
   }
 
   const marca = sobrescritas.marca || (marcaInfo ? marcaInfo.marca : null);

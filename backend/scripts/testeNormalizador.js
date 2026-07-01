@@ -132,6 +132,15 @@ function check(cond, nome) {
     analiseHalls.tipo === 'Bala' &&
     analiseHalls.marca === 'Halls',
     'drops Halls entra como bala com marca');
+  const hallsExtra = await encontrarOuCriarProduto('HALLS EXTRA FORTE 28G');
+  const hallsExtraMdlz = await encontrarOuCriarProduto('HALLS EXTRA FORTE MDLZ 28G');
+  const hallsMentaMdlz = await encontrarOuCriarProduto('HALLS MDLZ MENTA 28G');
+  check(hallsExtraMdlz.novo === false && String(hallsExtraMdlz.produto._id) === String(hallsExtra.produto._id),
+    'Halls Extra Forte com sigla de fabricante -> MESMO produto');
+  check(hallsMentaMdlz.novo === true && String(hallsMentaMdlz.produto._id) !== String(hallsExtra.produto._id),
+    'Halls Menta continua separado de Halls Extra Forte');
+  check(formatarNomeProduto('HALLS EXTRA FORTE MDLZ 28G') === 'Halls Extra Forte 28g',
+    'sigla de fabricante não aparece no nome formatado');
 
   const analiseDental = analisarProduto('ADVANC FRESH COLGATE CR DENTAL TOTAL 90G');
   check(analiseDental.categoria === 'Higiene' &&
