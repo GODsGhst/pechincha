@@ -3,14 +3,63 @@ export const API_BASE = (import.meta.env.VITE_API_URL || 'https://consult-price-
 const TOKEN_KEY = 'pechincha.web.token';
 const USER_KEY = 'pechincha.web.usuario';
 
-let authToken = localStorage.getItem(TOKEN_KEY);
+function storageDisponivel(nome) {
+  try {
+    return typeof window !== 'undefined' ? window[nome] : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+const sessionStore = storageDisponivel('sessionStorage');
+const legacyStore = storageDisponivel('localStorage');
+
+function ler(store, chave) {
+  try {
+    return store ? store.getItem(chave) : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function gravar(store, chave, valor) {
+  try {
+    if (store) store.setItem(chave, valor);
+  } catch (_error) {
+    // Sessão web continua em memória se o navegador bloquear storage.
+  }
+}
+
+function remover(store, chave) {
+  try {
+    if (store) store.removeItem(chave);
+  } catch (_error) {
+    // Sem ação: falha de storage não deve quebrar o app.
+  }
+}
+
+function migrarSessaoLegada() {
+  const tokenSessao = ler(sessionStore, TOKEN_KEY);
+  const usuarioSessao = ler(sessionStore, USER_KEY);
+  const tokenLegado = ler(legacyStore, TOKEN_KEY);
+  const usuarioLegado = ler(legacyStore, USER_KEY);
+
+  if (!tokenSessao && tokenLegado) gravar(sessionStore, TOKEN_KEY, tokenLegado);
+  if (!usuarioSessao && usuarioLegado) gravar(sessionStore, USER_KEY, usuarioLegado);
+  remover(legacyStore, TOKEN_KEY);
+  remover(legacyStore, USER_KEY);
+
+  return ler(sessionStore, TOKEN_KEY) || null;
+}
+
+let authToken = migrarSessaoLegada();
 const cacheGet = new Map();
 const requestsGet = new Map();
 const CACHE_MAX = 80;
 
 export function getStoredSession() {
   try {
-    const usuario = localStorage.getItem(USER_KEY);
+    const usuario = ler(sessionStore, USER_KEY);
     return {
       token: authToken,
       usuario: usuario ? JSON.parse(usuario) : null
@@ -25,16 +74,20 @@ export function setStoredSession(token, usuario) {
   authToken = token;
   cacheGet.clear();
   requestsGet.clear();
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(usuario));
+  gravar(sessionStore, TOKEN_KEY, token);
+  gravar(sessionStore, USER_KEY, JSON.stringify(usuario));
+  remover(legacyStore, TOKEN_KEY);
+  remover(legacyStore, USER_KEY);
 }
 
 export function clearStoredSession() {
   authToken = null;
   cacheGet.clear();
   requestsGet.clear();
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  remover(sessionStore, TOKEN_KEY);
+  remover(sessionStore, USER_KEY);
+  remover(legacyStore, TOKEN_KEY);
+  remover(legacyStore, USER_KEY);
 }
 
 function getCache(key, allowExpired = false) {

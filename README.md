@@ -51,10 +51,12 @@ e-mail antes de liberar a conta.
 O app faz a requisição à SEFAZ e envia os dados ao backend, que faz o cadastro
 e a análise — apenas o resultado volta ao aplicativo. Nenhuma regra de negócio
 ou credencial de banco fica no dispositivo (cliente fino). O token JWT é
-guardado no Keychain (iOS) / Keystore (Android).
+guardado no Keychain (iOS) / Keystore (Android). No site, o token fica apenas
+na sessão do navegador e o legado em `localStorage` é limpo automaticamente.
 
 O backend oferece confirmação de e-mail, 2FA para admin/superadmin, exportação
-de dados do usuário e exclusão de conta/dados vinculados.
+de dados do usuário, exclusão de conta/dados vinculados, headers HTTP de
+segurança e validação JWT restrita ao algoritmo esperado.
 
 ### Design
 

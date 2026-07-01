@@ -211,6 +211,11 @@ produtos, preços, estabelecimentos e junções; super administradores também
 podem alterar permissões de usuários.
 
 Rotas autenticadas exigem o header `Authorization: Bearer <token>`.
+Tokens JWT são assinados e verificados explicitamente com `HS256`; headers
+`Authorization` malformados ou tokens com outro algoritmo são recusados.
+Todas as respostas recebem headers de hardening como `X-Content-Type-Options`,
+`Content-Security-Policy`, `Cross-Origin-Opener-Policy`,
+`Permissions-Policy` e `Referrer-Policy`.
 
 ## Estrutura
 

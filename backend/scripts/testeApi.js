@@ -4,6 +4,7 @@
 // binário temporário na primeira execução.
 
 const { MongoMemoryServer } = require('mongodb-memory-server');
+const jwt = require('jsonwebtoken');
 
 const HTML_SUPERMERCADO_ABC = `
 <html><body>
@@ -195,6 +196,13 @@ async function main() {
     'CORS permite apenas origem web configurada');
   verificar((corsPermitido.headers.get('cache-control') || '').includes('public'),
     'GET público de produtos usa cache HTTP curto');
+  verificar(corsPermitido.headers.get('x-content-type-options') === 'nosniff' &&
+    corsPermitido.headers.get('cross-origin-opener-policy') === 'same-origin' &&
+    corsPermitido.headers.get('x-permitted-cross-domain-policies') === 'none',
+    'API envia headers HTTP de segurança');
+  verificar((corsPermitido.headers.get('vary') || '').includes('Origin') &&
+    (corsPermitido.headers.get('vary') || '').includes('Authorization'),
+    'respostas variam por origem e autorização');
 
   const corsBloqueado = await req('GET', '/produtos', null, null, { Origin: 'https://site-estranho.example' });
   verificar(corsBloqueado.status === 200 && !corsBloqueado.headers.get('access-control-allow-origin'),
@@ -305,6 +313,17 @@ async function main() {
     'auth/me retorna usuário atual autenticado');
   verificar((me.headers.get('cache-control') || '').includes('no-store'),
     'dados autenticados usam no-store');
+  const tokenHeaderMalformado = await req('GET', '/auth/me', null, `${token} extra`);
+  verificar(tokenHeaderMalformado.status === 401,
+    'auth rejeita header Authorization malformado');
+  const tokenAlgoritmoInvalido = jwt.sign(
+    { id: login.json.usuario.id, papel: 'usuario' },
+    process.env.JWT_SECRET,
+    { algorithm: 'HS384', expiresIn: '7d' }
+  );
+  const meAlgoritmoInvalido = await req('GET', '/auth/me', null, tokenAlgoritmoInvalido);
+  verificar(meAlgoritmoInvalido.status === 401,
+    'auth rejeita JWT fora do algoritmo permitido');
   const exportacaoDados = await req('GET', '/auth/data-export', null, token);
   verificar(exportacaoDados.status === 200 &&
     exportacaoDados.json.usuario.email === 'joao@email.com' &&

@@ -7,14 +7,15 @@ function papelValido(papel) {
 
 function authMiddleware(req, res, next) {
   const header = req.headers.authorization || '';
-  const [esquema, token] = header.split(' ');
+  const partes = header.split(' ');
+  const [esquema, token] = partes;
 
-  if (esquema !== 'Bearer' || !token) {
+  if (partes.length !== 2 || esquema !== 'Bearer' || !token || token.length > 4096) {
     return res.status(401).json({ error: 'Token não fornecido' });
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     if (!payload || !payload.id || !mongoose.Types.ObjectId.isValid(payload.id)) {
       return res.status(401).json({ error: 'Token inválido ou expirado' });
     }

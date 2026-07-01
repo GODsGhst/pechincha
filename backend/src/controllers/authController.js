@@ -30,6 +30,7 @@ const PASSWORD_POLICY_MESSAGE = 'A senha deve ter entre 8 e 128 caracteres, com 
 
 function gerarToken(usuario) {
   return jwt.sign({ id: usuario._id, papel: usuario.papel || 'usuario' }, process.env.JWT_SECRET, {
+    algorithm: 'HS256',
     expiresIn: process.env.JWT_EXPIRES_IN || '7d'
   });
 }
