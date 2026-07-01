@@ -17,6 +17,8 @@ const LOGIN_MAX_FALHAS = 5;
 const LOGIN_BLOQUEIO_MS = 15 * 60 * 1000;
 const RESET_TOKEN_BYTES = 32;
 const RESET_EXPIRA_MS = 60 * 60 * 1000;
+const ADMIN_2FA_EXPIRA_MS = 10 * 60 * 1000;
+const ADMIN_2FA_MAX_TENTATIVAS = 5;
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync('senha-invalida-para-equalizar-tempo', SALT_ROUNDS);
 const RESET_GENERIC_MESSAGE = 'Se o e-mail estiver cadastrado, enviaremos as instruções para redefinir a senha.';
 const PASSWORD_POLICY_MESSAGE = 'A senha deve ter entre 8 e 128 caracteres, com letra maiúscula, letra minúscula e número';
@@ -60,8 +62,16 @@ function resetDevHabilitado() {
   return process.env.NODE_ENV !== 'production' && process.env.PASSWORD_RESET_EXPOSE_TOKEN !== 'false';
 }
 
+function admin2faDevHabilitado() {
+  return process.env.NODE_ENV !== 'production';
+}
+
 function entregaResetDisponivel() {
   return emailService.smtpConfigurado() || resetDevHabilitado();
+}
+
+function papelElevado(usuario) {
+  return ['admin', 'superadmin'].includes(usuario && usuario.papel);
 }
 
 function montarResetUrl(email, token) {
@@ -88,6 +98,33 @@ async function registrarInstrucaoReset(usuario, token) {
     token,
     resetUrl
   });
+}
+
+function gerarCodigoAdmin2fa() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+async function iniciarAdmin2fa(usuario) {
+  const codigo = gerarCodigoAdmin2fa();
+  usuario.admin_2fa = {
+    codigo_hash: hashResetToken(codigo),
+    expira_em: new Date(Date.now() + ADMIN_2FA_EXPIRA_MS),
+    solicitado_em: new Date(),
+    tentativas: 0
+  };
+  await usuario.save();
+
+  if (admin2faDevHabilitado()) {
+    console.info(`[admin-2fa] ${usuario.email} codigo=${codigo}`);
+  }
+
+  await emailService.enviarCodigoAdmin2fa({
+    email: usuario.email,
+    nome: usuario.nome,
+    codigo
+  });
+
+  return codigo;
 }
 
 function loginBloqueado(usuario) {
@@ -131,6 +168,14 @@ function tokenResetValido(usuario, token) {
   if (!reset || !reset.token_hash || !reset.expira_em) return false;
   if (new Date(reset.expira_em).getTime() <= Date.now()) return false;
   return compararHexSeguro(reset.token_hash, hashResetToken(token));
+}
+
+function admin2faValido(usuario, codigo) {
+  const admin2fa = usuario && usuario.admin_2fa;
+  if (!admin2fa || !admin2fa.codigo_hash || !admin2fa.expira_em) return false;
+  if (Number(admin2fa.tentativas || 0) >= ADMIN_2FA_MAX_TENTATIVAS) return false;
+  if (new Date(admin2fa.expira_em).getTime() <= Date.now()) return false;
+  return compararHexSeguro(admin2fa.codigo_hash, hashResetToken(codigo));
 }
 
 async function register(req, res, next) {
@@ -198,7 +243,67 @@ async function login(req, res, next) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
+    if (papelElevado(usuario)) {
+      const codigo = await iniciarAdmin2fa(usuario);
+      const payload = {
+        requires_2fa: true,
+        message: 'Enviamos um código para confirmar seu acesso administrativo.',
+        email: usuario.email,
+        usuario: formatarUsuario(usuario)
+      };
+      if (admin2faDevHabilitado()) payload.codigo_2fa_dev = codigo;
+      return res.status(202).json(payload);
+    }
+
     await limparFalhasLogin(usuario);
+    return res.json({ token: gerarToken(usuario), usuario: formatarUsuario(usuario) });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function verifyAdmin2fa(req, res, next) {
+  try {
+    const { email, codigo } = req.body || {};
+    const emailNormalizado = normalizarEmail(email);
+    const codigoTexto = String(codigo || '').trim();
+
+    if (!emailNormalizado || !EMAIL_REGEX.test(emailNormalizado) || emailNormalizado.length > 254) {
+      return res.status(400).json({ error: 'E-mail inválido' });
+    }
+    if (!/^\d{6}$/.test(codigoTexto)) {
+      return res.status(400).json({ error: 'Código administrativo inválido ou expirado' });
+    }
+
+    const usuario = await Usuario.findOne({ email: emailNormalizado })
+      .select('+admin_2fa.codigo_hash +admin_2fa.expira_em +admin_2fa.solicitado_em +admin_2fa.tentativas +login.tentativas_falhas +login.bloqueado_ate +login.ultimo_falha_em');
+
+    if (!usuario || !papelElevado(usuario) || !admin2faValido(usuario, codigoTexto)) {
+      if (usuario && papelElevado(usuario) && usuario.admin_2fa && usuario.admin_2fa.codigo_hash) {
+        const tentativas = Number(usuario.admin_2fa.tentativas || 0) + 1;
+        usuario.admin_2fa.tentativas = tentativas;
+        if (tentativas >= ADMIN_2FA_MAX_TENTATIVAS) {
+          usuario.admin_2fa = {
+            codigo_hash: null,
+            expira_em: null,
+            solicitado_em: null,
+            tentativas: 0
+          };
+        }
+        await usuario.save();
+      }
+      return res.status(400).json({ error: 'Código administrativo inválido ou expirado' });
+    }
+
+    usuario.admin_2fa = {
+      codigo_hash: null,
+      expira_em: null,
+      solicitado_em: null,
+      tentativas: 0
+    };
+    await usuario.save();
+    await limparFalhasLogin(usuario);
+
     return res.json({ token: gerarToken(usuario), usuario: formatarUsuario(usuario) });
   } catch (err) {
     return next(err);
@@ -338,4 +443,4 @@ async function removerConta(req, res, next) {
   }
 }
 
-module.exports = { register, login, forgotPassword, resetPassword, me, removerConta };
+module.exports = { register, login, verifyAdmin2fa, forgotPassword, resetPassword, me, removerConta };

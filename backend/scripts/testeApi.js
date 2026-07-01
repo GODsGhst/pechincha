@@ -286,16 +286,34 @@ async function main() {
   verificar(adminReg.status === 201, 'cria usuário que será promovido a admin');
   await Usuario.updateOne({ email: 'admin@email.com' }, { $set: { papel: 'admin' } });
   const adminLogin = await req('POST', '/auth/login', { email: 'admin@email.com', senha: senhaTeste });
-  verificar(adminLogin.status === 200 && adminLogin.json.usuario.papel === 'admin', 'login admin retorna papel admin');
-  const adminToken = adminLogin.json.token;
+  verificar(adminLogin.status === 202 &&
+    adminLogin.json.requires_2fa === true &&
+    adminLogin.json.usuario.papel === 'admin' &&
+    !adminLogin.json.token,
+    'login admin exige segundo fator antes de liberar token');
+  const admin2faInvalido = await req('POST', '/auth/verify-2fa', { email: 'admin@email.com', codigo: '000000' });
+  verificar(admin2faInvalido.status === 400, '2FA admin rejeita código inválido');
+  const admin2fa = await req('POST', '/auth/verify-2fa', {
+    email: 'admin@email.com',
+    codigo: adminLogin.json.codigo_2fa_dev
+  });
+  verificar(admin2fa.status === 200 && admin2fa.json.usuario.papel === 'admin' && !!admin2fa.json.token,
+    '2FA admin libera token após código válido');
+  const adminToken = admin2fa.json.token;
 
   const superReg = await req('POST', '/auth/register', { nome: 'Super Admin', email: 'super@email.com', senha: senhaTeste });
   verificar(superReg.status === 201, 'cria usuário que será promovido a superadmin');
   await Usuario.updateOne({ email: 'super@email.com' }, { $set: { papel: 'superadmin' } });
   const superLogin = await req('POST', '/auth/login', { email: 'super@email.com', senha: senhaTeste });
-  verificar(superLogin.status === 200 && superLogin.json.usuario.papel === 'superadmin',
-    'login superadmin retorna papel superadmin');
-  const superToken = superLogin.json.token;
+  verificar(superLogin.status === 202 && superLogin.json.requires_2fa === true && superLogin.json.usuario.papel === 'superadmin',
+    'login superadmin exige segundo fator');
+  const super2fa = await req('POST', '/auth/verify-2fa', {
+    email: 'super@email.com',
+    codigo: superLogin.json.codigo_2fa_dev
+  });
+  verificar(super2fa.status === 200 && super2fa.json.usuario.papel === 'superadmin' && !!super2fa.json.token,
+    '2FA superadmin libera token após código válido');
+  const superToken = super2fa.json.token;
 
   const resumoUsuario = await req('GET', '/admin/resumo', null, token);
   verificar(resumoUsuario.status === 403, 'usuário comum não acessa painel admin');

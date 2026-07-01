@@ -8,10 +8,13 @@ import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, scanFromURLAsync, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
 import { colors, fonts, radius } from '../theme';
 import { formatBRL } from '../utils/format';
+
+const FILA_CUPONS_KEY = 'pechincha.cuponsPendentes.v1';
 
 export default function ScanScreen({ navigation }) {
   const [permissao, pedirPermissao] = useCameraPermissions();
@@ -23,6 +26,15 @@ export default function ScanScreen({ navigation }) {
   const [duplicado, setDuplicado] = useState(null);
   const [etapa, setEtapa] = useState('');
   const [segundos, setSegundos] = useState(0);
+  const [cuponsPendentes, setCuponsPendentes] = useState(0);
+  const [sincronizandoPendentes, setSincronizandoPendentes] = useState(false);
+
+  useEffect(() => {
+    carregarCuponsPendentes().then((fila) => {
+      setCuponsPendentes(fila.length);
+      if (fila.length > 0) sincronizarCuponsPendentes();
+    });
+  }, []);
 
   useEffect(() => {
     if (!processando) {
@@ -95,6 +107,59 @@ export default function ScanScreen({ navigation }) {
     setErro(e.message || mensagemPadrao);
   }
 
+  function erroDeConexao(e) {
+    return !e || e.status === undefined || e.status === 'timeout';
+  }
+
+  async function carregarCuponsPendentes() {
+    try {
+      const bruto = await AsyncStorage.getItem(FILA_CUPONS_KEY);
+      const fila = bruto ? JSON.parse(bruto) : [];
+      return Array.isArray(fila) ? fila : [];
+    } catch (_e) {
+      await AsyncStorage.removeItem(FILA_CUPONS_KEY);
+      return [];
+    }
+  }
+
+  async function salvarCuponsPendentes(fila) {
+    const limpa = Array.isArray(fila) ? fila.slice(-30) : [];
+    await AsyncStorage.setItem(FILA_CUPONS_KEY, JSON.stringify(limpa));
+    setCuponsPendentes(limpa.length);
+  }
+
+  async function enfileirarCupom(url) {
+    const fila = await carregarCuponsPendentes();
+    if (fila.some((item) => item.url_origem === url)) {
+      setCuponsPendentes(fila.length);
+      return;
+    }
+    await salvarCuponsPendentes([...fila, { url_origem: url, criado_em: new Date().toISOString() }]);
+  }
+
+  async function sincronizarCuponsPendentes() {
+    if (sincronizandoPendentes) return;
+    setSincronizandoPendentes(true);
+    try {
+      let fila = await carregarCuponsPendentes();
+      while (fila.length > 0) {
+        try {
+          const resposta = await api.post('/nfce/processar', { url_origem: fila[0].url_origem }, { timeoutMs: 90000 });
+          setResultado(resposta);
+        } catch (e) {
+          if (e.status !== 409) throw e;
+        }
+        fila = fila.slice(1);
+        await salvarCuponsPendentes(fila);
+      }
+      setErro(null);
+    } catch (_e) {
+      setErro('Há cupons pendentes aguardando conexão para sincronizar.');
+    } finally {
+      setSincronizandoPendentes(false);
+    }
+  }
+
   async function processarUrl(url) {
     const urlLimpa = String(url || '').trim();
     iniciarProcessamento('QR encontrado. Buscando dados do cupom...');
@@ -102,6 +167,11 @@ export default function ScanScreen({ navigation }) {
       const r = await api.post('/nfce/processar', { url_origem: urlLimpa }, { timeoutMs: 90000 });
       setResultado(r);
     } catch (e) {
+      if (erroDeConexao(e)) {
+        await enfileirarCupom(urlLimpa);
+        setErro('Sem internet. Guardei este cupom para sincronizar quando a conexão voltar.');
+        return;
+      }
       tratarFalhaProcessamento(e, 'Não foi possível processar este cupom.');
     } finally {
       setProcessando(false);
@@ -250,6 +320,20 @@ export default function ScanScreen({ navigation }) {
             {mensagemProcessamento()}
           </Text>
           {processando && <ActivityIndicator color={colors.white} style={{ marginTop: 12 }} />}
+          {cuponsPendentes > 0 && !processando && (
+            <View style={styles.pendentesBox}>
+              <Text style={styles.pendentesTexto}>
+                {cuponsPendentes} {cuponsPendentes === 1 ? 'cupom pendente' : 'cupons pendentes'}
+              </Text>
+              <Pressable style={styles.pendentesBotao} onPress={sincronizarCuponsPendentes} disabled={sincronizandoPendentes}>
+                {sincronizandoPendentes ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={styles.pendentesBotaoTexto}>Sincronizar</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
           {erro && !processando && (
             <View style={styles.erroBox}>
               <Text style={styles.erroTexto}>{erro}</Text>
@@ -313,6 +397,10 @@ const styles = StyleSheet.create({
   dica: { fontFamily: fonts.medium, fontSize: 14, color: colors.white, textAlign: 'center', marginTop: 24 },
   erroBox: { backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: radius.md, padding: 14, marginTop: 16, alignItems: 'center' },
   erroTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.white, textAlign: 'center', lineHeight: 19 },
+  pendentesBox: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: radius.md, padding: 10, marginTop: 14 },
+  pendentesTexto: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.white },
+  pendentesBotao: { minWidth: 92, height: 34, borderRadius: radius.sm, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  pendentesBotaoTexto: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.white },
   abrirNota: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 34, borderRadius: radius.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)', paddingHorizontal: 12, marginTop: 10 },
   abrirNotaTexto: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.white },
   tentarNovo: { fontFamily: fonts.semibold, fontSize: 14, color: '#5FD698', marginTop: 8 },

@@ -15,9 +15,16 @@ const usuarioSchema = new mongoose.Schema({
     expira_em:     { type: Date, default: null, select: false },
     solicitado_em: { type: Date, default: null, select: false }
   },
+  admin_2fa: {
+    codigo_hash:   { type: String, default: null, select: false },
+    expira_em:     { type: Date, default: null, select: false },
+    solicitado_em: { type: Date, default: null, select: false },
+    tentativas:    { type: Number, default: 0, select: false }
+  },
   criado_em: { type: Date, default: Date.now }
 });
 
 usuarioSchema.index({ 'reset_senha.expira_em': 1 }, { sparse: true });
+usuarioSchema.index({ 'admin_2fa.expira_em': 1 }, { sparse: true });
 
 module.exports = mongoose.model('Usuario', usuarioSchema);

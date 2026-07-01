@@ -9,8 +9,8 @@ import { useAuth } from '../context/AuthContext';
 import { colors, fonts, radius } from '../theme';
 
 export default function LoginScreen() {
-  const { login, register, solicitarResetSenha, redefinirSenha } = useAuth();
-  const [modo, setModo] = useState('login'); // 'login' | 'cadastro' | 'recuperar' | 'redefinir'
+  const { login, register, solicitarResetSenha, redefinirSenha, confirmar2fa } = useAuth();
+  const [modo, setModo] = useState('login'); // 'login' | 'cadastro' | 'recuperar' | 'redefinir' | '2fa'
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -48,6 +48,10 @@ export default function LoginScreen() {
       setErro('Informe o código de recuperação.');
       return;
     }
+    if (modo === '2fa' && !/^\d{6}$/.test(tokenReset.trim())) {
+      setErro('Informe o código de 6 dígitos.');
+      return;
+    }
 
     setCarregando(true);
     try {
@@ -64,8 +68,16 @@ export default function LoginScreen() {
         setTokenReset('');
         setModo('login');
         setMensagem(resposta?.message || 'Senha redefinida. Entre com a nova senha.');
+      } else if (modo === '2fa') {
+        await confirmar2fa(emailLimpo, tokenReset.trim());
       } else {
-        await login(emailLimpo, senha);
+        const resposta = await login(emailLimpo, senha);
+        if (resposta?.requires_2fa) {
+          if (resposta?.codigo_2fa_dev) setTokenReset(resposta.codigo_2fa_dev);
+          setSenha('');
+          setMensagem(resposta?.message || 'Enviamos um código para confirmar seu acesso.');
+          setModo('2fa');
+        }
       }
     } catch (e) {
       setErro(e.message || 'Não foi possível entrar');
@@ -77,8 +89,9 @@ export default function LoginScreen() {
   const cadastro = modo === 'cadastro';
   const recuperar = modo === 'recuperar';
   const redefinir = modo === 'redefinir';
-  const titulo = cadastro ? 'Criar conta' : recuperar ? 'Recuperar senha' : redefinir ? 'Nova senha' : 'Entrar';
-  const textoBotao = cadastro ? 'Cadastrar' : recuperar ? 'Enviar recuperação' : redefinir ? 'Redefinir senha' : 'Entrar';
+  const doisFatores = modo === '2fa';
+  const titulo = cadastro ? 'Criar conta' : recuperar ? 'Recuperar senha' : redefinir ? 'Nova senha' : doisFatores ? 'Código admin' : 'Entrar';
+  const textoBotao = cadastro ? 'Cadastrar' : recuperar ? 'Enviar recuperação' : redefinir ? 'Redefinir senha' : doisFatores ? 'Confirmar código' : 'Entrar';
 
   return (
     <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
@@ -98,16 +111,17 @@ export default function LoginScreen() {
             <Campo icone="person-outline" placeholder="Seu nome" value={nome} onChangeText={setNome} autoCapitalize="words" />
           )}
           <Campo icone="mail-outline" placeholder="E-mail" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-          {redefinir && (
+          {(redefinir || doisFatores) && (
             <Campo
               icone="key-outline"
-              placeholder="Código de recuperação"
+              placeholder={doisFatores ? 'Código de 6 dígitos' : 'Código de recuperação'}
               value={tokenReset}
               onChangeText={setTokenReset}
+              keyboardType={doisFatores ? 'number-pad' : 'default'}
               autoCapitalize="none"
             />
           )}
-          {!recuperar && (
+          {!recuperar && !doisFatores && (
             <Campo
               icone="lock-closed-outline"
               placeholder={cadastro || redefinir ? 'Senha forte' : 'Senha'}
@@ -130,7 +144,7 @@ export default function LoginScreen() {
             </Pressable>
           )}
 
-          {recuperar || redefinir ? (
+          {recuperar || redefinir || doisFatores ? (
             <Pressable onPress={() => trocarModo('login')}>
               <Text style={styles.alternar}>Voltar para <Text style={styles.alternarForte}>entrar</Text></Text>
             </Pressable>

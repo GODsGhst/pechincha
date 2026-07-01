@@ -61,8 +61,11 @@ export function AuthProvider({ children }) {
   }
 
   async function login(email, senha) {
-    const { token, usuario: u } = await api.post('/auth/login', { email, senha });
+    const resposta = await api.post('/auth/login', { email, senha });
+    if (resposta?.requires_2fa) return resposta;
+    const { token, usuario: u } = resposta;
     await persistirSessao(token, u);
+    return resposta;
   }
 
   async function register(nome, email, senha) {
@@ -76,6 +79,11 @@ export function AuthProvider({ children }) {
 
   async function redefinirSenha(email, token, senha) {
     return api.post('/auth/reset-password', { email, token, senha });
+  }
+
+  async function confirmar2fa(email, codigo) {
+    const { token, usuario: u } = await api.post('/auth/verify-2fa', { email, codigo });
+    await persistirSessao(token, u);
   }
 
   async function logout() {
@@ -101,6 +109,7 @@ export function AuthProvider({ children }) {
       register,
       solicitarResetSenha,
       redefinirSenha,
+      confirmar2fa,
       logout,
       excluirConta
     }}>

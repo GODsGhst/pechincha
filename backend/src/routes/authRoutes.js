@@ -47,9 +47,23 @@ const limitarResetSenha = rateLimit({
   max: 8,
   mensagem: 'Muitas tentativas de redefinição. Aguarde alguns minutos e tente novamente.'
 });
+const limitar2fa = rateLimit({
+  nome: 'auth:2fa',
+  janelaMs: 15 * 60 * 1000,
+  max: 10,
+  mensagem: 'Muitas tentativas de código. Aguarde alguns minutos e tente novamente.'
+});
+const limitar2faConta = rateLimit({
+  nome: 'auth:2fa:conta',
+  janelaMs: 15 * 60 * 1000,
+  max: 6,
+  mensagem: 'Muitas tentativas para este e-mail. Aguarde alguns minutos e tente novamente.',
+  keyGenerator: (req) => `auth:2fa:conta:${emailDaRequisicao(req) || req.ip || 'sem-email'}`
+});
 
 router.post('/register', limitarCadastro, authController.register);
 router.post('/login', limitarLoginIp, limitarLoginConta, authController.login);
+router.post('/verify-2fa', limitar2fa, limitar2faConta, authController.verifyAdmin2fa);
 router.post('/forgot-password', limitarRecuperacao, limitarRecuperacaoConta, authController.forgotPassword);
 router.post('/reset-password', limitarResetSenha, authController.resetPassword);
 router.get('/me', authMiddleware, authController.me);

@@ -17,7 +17,10 @@ export default function CartScreen({ navigation }) {
     alterarQuantidade,
     carregarLista,
     carregando: carregandoLista,
-    erro: erroLista
+    erro: erroLista,
+    pendentesFila,
+    sincronizandoFila,
+    sincronizarFila
   } = useCart();
   const [analise, setAnalise] = useState(null);
   const [carregandoAnalise, setCarregandoAnalise] = useState(false);
@@ -170,6 +173,21 @@ export default function CartScreen({ navigation }) {
                 <Text style={styles.alertaTexto}>{erroLista}</Text>
               </View>
             ) : null}
+            {pendentesFila > 0 ? (
+              <View style={styles.alertaFila}>
+                <Ionicons name="sync-outline" size={18} color={colors.brandDark} />
+                <Text style={styles.alertaTexto}>
+                  {pendentesFila} {pendentesFila === 1 ? 'alteração pendente' : 'alterações pendentes'}
+                </Text>
+                <Pressable style={styles.sincronizarBotao} onPress={sincronizarFila} disabled={sincronizandoFila}>
+                  {sincronizandoFila ? (
+                    <ActivityIndicator size="small" color={colors.brand} />
+                  ) : (
+                    <Text style={styles.sincronizarTexto}>Sincronizar</Text>
+                  )}
+                </Pressable>
+              </View>
+            ) : null}
             {renderAnalise()}
           </>
         }
@@ -279,7 +297,10 @@ const styles = StyleSheet.create({
   rankingNome: { flex: 1, fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft },
   rankingPreco: { fontFamily: fonts.monoMedium, fontSize: 12, color: colors.ink },
   alertaLista: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF2EC', borderWidth: 1, borderColor: '#FFD4C4', borderRadius: radius.md, padding: 10, marginBottom: 10 },
+  alertaFila: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brandSoft, borderWidth: 1, borderColor: colors.brandSoftLine, borderRadius: radius.md, padding: 10, marginBottom: 10 },
   alertaTexto: { flex: 1, fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft },
+  sincronizarBotao: { minWidth: 84, height: 32, borderRadius: radius.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.brandSoftLine, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  sincronizarTexto: { fontFamily: fonts.semibold, fontSize: 12, color: colors.brandDark },
   card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: 12, marginBottom: 10 },
   cardImg: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: '#F1F0EA', alignItems: 'center', justifyContent: 'center' },
   cardNome: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink },

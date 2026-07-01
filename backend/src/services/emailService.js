@@ -84,4 +84,30 @@ async function enviarResetSenha({ email, nome, token, resetUrl }) {
   return enviarEmail({ to: destino, subject: assunto, text: texto, html });
 }
 
-module.exports = { enviarEmail, enviarResetSenha, smtpConfigurado };
+async function enviarCodigoAdmin2fa({ email, nome, codigo }) {
+  const destino = String(email || '').trim().toLowerCase();
+  const assunto = 'Código de acesso administrativo do Pechincha';
+  const saudacao = nome ? `Olá, ${nome}.` : 'Olá.';
+  const saudacaoHtml = escapeHtml(saudacao);
+  const codigoLimpo = String(codigo || '').trim();
+  const codigoHtml = escapeHtml(codigoLimpo);
+  const texto = [
+    saudacao,
+    '',
+    'Use este código para concluir seu acesso administrativo:',
+    codigoLimpo,
+    '',
+    'Esse código expira em 10 minutos. Se você não tentou entrar, troque sua senha.'
+  ].join('\n');
+
+  const html = `
+    <p>${saudacaoHtml}</p>
+    <p>Use este código para concluir seu acesso administrativo:</p>
+    <p><strong style="font-size:24px;letter-spacing:4px">${codigoHtml}</strong></p>
+    <p>Esse código expira em 10 minutos. Se você não tentou entrar, troque sua senha.</p>
+  `;
+
+  return enviarEmail({ to: destino, subject: assunto, text: texto, html });
+}
+
+module.exports = { enviarEmail, enviarResetSenha, enviarCodigoAdmin2fa, smtpConfigurado };

@@ -117,6 +117,19 @@ function LoginView({ onLogin }) {
         setMode('reset');
         return;
       }
+      if (mode === '2fa') {
+        if (!/^\d{6}$/.test(form.token.trim())) {
+          setError('Informe o código de 6 dígitos.');
+          return;
+        }
+        const data = await api.post('/auth/verify-2fa', {
+          email: form.email,
+          codigo: form.token.trim()
+        });
+        setStoredSession(data.token, data.usuario);
+        onLogin(data.usuario);
+        return;
+      }
       if (mode === 'reset') {
         const data = await api.post('/auth/reset-password', {
           email: form.email,
@@ -134,6 +147,13 @@ function LoginView({ onLogin }) {
         ? { email: form.email, senha: form.senha }
         : { nome: form.nome, email: form.email, senha: form.senha };
       const data = await api.post(path, body);
+      if (data.requires_2fa) {
+        if (data.codigo_2fa_dev) setForm((prev) => ({ ...prev, token: data.codigo_2fa_dev, senha: '' }));
+        else setForm((prev) => ({ ...prev, senha: '' }));
+        setNotice(data.message || 'Enviamos um código para confirmar seu acesso.');
+        setMode('2fa');
+        return;
+      }
       setStoredSession(data.token, data.usuario);
       onLogin(data.usuario);
     } catch (err) {
@@ -157,7 +177,7 @@ function LoginView({ onLogin }) {
         <div className="switcher" role="tablist">
           <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">Entrar</button>
           <button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')} type="button">Criar conta</button>
-          <button className={mode === 'forgot' || mode === 'reset' ? 'active' : ''} onClick={() => setMode('forgot')} type="button">Esqueci</button>
+          <button className={mode === 'forgot' || mode === 'reset' || mode === '2fa' ? 'active' : ''} onClick={() => setMode('forgot')} type="button">Esqueci</button>
         </div>
 
         <form className="auth-form" onSubmit={submit}>
@@ -182,7 +202,7 @@ function LoginView({ onLogin }) {
               required
             />
           </label>
-          {mode !== 'forgot' && (
+          {mode !== 'forgot' && mode !== '2fa' && (
             <label>
               Senha
               <input
@@ -195,9 +215,9 @@ function LoginView({ onLogin }) {
               />
             </label>
           )}
-          {mode === 'reset' && (
+          {(mode === 'reset' || mode === '2fa') && (
             <label>
-              Código de recuperação
+              {mode === '2fa' ? 'Código administrativo' : 'Código de recuperação'}
               <input
                 value={form.token}
                 onChange={(e) => setForm((prev) => ({ ...prev, token: e.target.value }))}
@@ -210,7 +230,7 @@ function LoginView({ onLogin }) {
           {error && <div className="error-line"><CircleAlert size={16} />{error}</div>}
           <button className="primary full" disabled={loading} type="submit">
             <UserRound size={17} />
-            {loading ? 'Aguarde' : mode === 'login' ? 'Entrar' : mode === 'register' ? 'Criar conta' : mode === 'forgot' ? 'Enviar e-mail' : 'Redefinir senha'}
+            {loading ? 'Aguarde' : mode === 'login' ? 'Entrar' : mode === 'register' ? 'Criar conta' : mode === 'forgot' ? 'Enviar e-mail' : mode === '2fa' ? 'Confirmar código' : 'Redefinir senha'}
           </button>
         </form>
       </section>

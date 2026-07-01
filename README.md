@@ -41,6 +41,8 @@ Aplicativo mobile em Expo/React Native focado em dois gestos de baixo atrito:
    mais barata, com a localização.
 
 Além de **busca de preços** e **login** (cada usuário vê apenas suas notas).
+O app também mantém cache local e uma fila offline para lista de compras e
+cupons já lidos por QR, sincronizando quando a conexão volta.
 
 ### Segurança
 

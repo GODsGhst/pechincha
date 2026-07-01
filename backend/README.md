@@ -74,6 +74,11 @@ do token temporário no banco e envia as instruções por e-mail quando o SMTP e
 configurado. Em desenvolvimento/teste o token pode voltar no JSON para facilitar
 a apresentação; em produção não exponha esse token.
 
+Contas `admin` e `superadmin` têm segundo fator obrigatório: depois da senha,
+o backend envia um código de 6 dígitos por e-mail e só libera o JWT em
+`POST /api/auth/verify-2fa`. Em desenvolvimento/teste o código aparece na
+resposta para facilitar validação local.
+
 Os limites de requisição usam buckets compartilhados no MongoDB, com chaves
 hashadas, então continuam funcionando quando a API roda com múltiplos workers
 ou mais de uma instância.
