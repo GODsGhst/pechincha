@@ -66,6 +66,10 @@ do token temporário no banco e envia as instruções por e-mail quando o SMTP e
 configurado. Em desenvolvimento/teste o token pode voltar no JSON para facilitar
 a apresentação; em produção não exponha esse token.
 
+Os limites de requisição usam buckets compartilhados no MongoDB, com chaves
+hashadas, então continuam funcionando quando a API roda com múltiplos workers
+ou mais de uma instância.
+
 Em produção, a API não inicia se faltar configuração crítica: `MONGODB_URI`,
 `JWT_SECRET` forte, `CORS_ORIGIN` HTTPS, `PASSWORD_RESET_BASE_URL` HTTPS e SMTP
 completo (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`). Isso impede publicar o reset

@@ -99,6 +99,7 @@ async function main() {
   const ImportacaoNfce = require('../src/models/ImportacaoNfce');
   const ListaCompra = require('../src/models/ListaCompra');
   const AdminAuditLog = require('../src/models/AdminAuditLog');
+  const RateLimitBucket = require('../src/models/RateLimitBucket');
   const compraService = require('../src/services/compraService');
   const cacheService = require('../src/services/cacheService');
   const productNormalizer = require('../src/services/productNormalizer');
@@ -258,6 +259,11 @@ async function main() {
     loginBloqueado = await req('POST', '/auth/login', { email: 'joao@email.com', senha: `errada-${i}` });
   }
   verificar(loginBloqueado.status === 429, 'login bloqueia conta após tentativas repetidas de senha');
+
+  const rateBuckets = await RateLimitBucket.find().select('chave contador expira_em').lean();
+  verificar(rateBuckets.length > 0 &&
+    rateBuckets.every((bucket) => /^[a-f0-9]{64}$/.test(bucket.chave)),
+    'rate limit usa buckets compartilhados no Mongo com chaves hashadas');
 
   const produtoDireto = await req('POST', '/produtos', { nome: 'PRODUTO DIRETO 1UN' }, token);
   verificar(produtoDireto.status === 403, 'usuário comum não cria produto direto');
