@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
 import ProductImage from '../components/ProductImage';
+import { useAuth } from '../context/AuthContext';
 import { colors, fonts, radius } from '../theme';
 import { formatBRL, formatPrecoUnidade } from '../utils/format';
 
@@ -65,20 +66,26 @@ function formDeProduto(produto) {
 }
 
 export default function AdminScreen({ navigation }) {
+  const { usuario: usuarioAtual } = useAuth();
   const [aba, setAba] = useState('produtos');
   const [resumo, setResumo] = useState(null);
   const [usuarios, setUsuarios] = useState([]);
   const [auditoria, setAuditoria] = useState([]);
   const [produtos, setProdutos] = useState([]);
+  const [precos, setPrecos] = useState([]);
   const [termo, setTermo] = useState('');
   const [selecionado, setSelecionado] = useState(null);
   const [form, setForm] = useState(FORM_INICIAL);
+  const [precoEditando, setPrecoEditando] = useState(null);
+  const [precoValor, setPrecoValor] = useState('');
+  const [destinoMerge, setDestinoMerge] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
 
   const totais = resumo?.totais || {};
   const editando = Boolean(selecionado?.id);
+  const superadmin = usuarioAtual?.papel === 'superadmin';
 
   const buscarProdutos = useCallback(async (texto = '') => {
     const query = texto.trim() ? `?nome=${encodeURIComponent(texto.trim())}` : '';
@@ -98,6 +105,8 @@ export default function AdminScreen({ navigation }) {
       setUsuarios(usuariosResp.usuarios || []);
       setAuditoria(auditoriaResp.logs || []);
       await buscarProdutos('');
+      const precosResp = await api.get('/admin/precos?limite=40', { timeoutMs: 20000 });
+      setPrecos(precosResp.precos || []);
     } catch (e) {
       setErro(e.message || 'Não foi possível carregar o painel.');
     } finally {
@@ -130,6 +139,12 @@ export default function AdminScreen({ navigation }) {
     setSelecionado(produto);
     setForm(formDeProduto(produto));
     setAba('produtos');
+  }
+
+  function selecionarPreco(preco) {
+    setPrecoEditando(preco);
+    setPrecoValor(String(preco.valor || ''));
+    setAba('precos');
   }
 
   async function salvarProduto() {
@@ -195,6 +210,72 @@ export default function AdminScreen({ navigation }) {
     }
   }
 
+  async function salvarPreco() {
+    if (!precoEditando?.id) return;
+    setSalvando(true);
+    try {
+      const atualizado = await api.put(`/admin/precos/${precoEditando.id}`, {
+        valor: Number(String(precoValor).replace(',', '.'))
+      }, { timeoutMs: 20000 });
+      setPrecos((lista) => lista.map((item) => item.id === atualizado.id ? atualizado : item));
+      setPrecoEditando(atualizado);
+      setPrecoValor(String(atualizado.valor || ''));
+      setResumo(await api.get('/admin/resumo', { timeoutMs: 20000 }));
+    } catch (e) {
+      Alert.alert('Não foi possível salvar preço', e.message || 'Tente novamente.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  function confirmarRemocaoPreco(preco) {
+    Alert.alert('Remover preço?', 'Esse registro será removido do histórico e o menor preço será recalculado.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Remover',
+        style: 'destructive',
+        onPress: async () => {
+          setSalvando(true);
+          try {
+            await api.delete(`/admin/precos/${preco.id}`, { timeoutMs: 20000 });
+            setPrecos((lista) => lista.filter((item) => item.id !== preco.id));
+            if (precoEditando?.id === preco.id) {
+              setPrecoEditando(null);
+              setPrecoValor('');
+            }
+          } catch (e) {
+            Alert.alert('Não foi possível remover', e.message || 'Tente novamente.');
+          } finally {
+            setSalvando(false);
+          }
+        }
+      }
+    ]);
+  }
+
+  async function juntarProdutoSelecionado() {
+    if (!selecionado?.id || !destinoMerge.trim()) {
+      Alert.alert('IDs obrigatórios', 'Selecione o produto de origem e informe o ID do produto destino.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      await api.post('/admin/produtos/juntar', {
+        origem_id: selecionado.id,
+        destino_id: destinoMerge.trim()
+      }, { timeoutMs: 20000 });
+      setDestinoMerge('');
+      novoProduto();
+      await buscarProdutos(termo);
+      const precosResp = await api.get('/admin/precos?limite=40', { timeoutMs: 20000 });
+      setPrecos(precosResp.precos || []);
+    } catch (e) {
+      Alert.alert('Não foi possível juntar', e.message || 'Tente novamente.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   const ultimasImportacoes = useMemo(() => resumo?.ultimas_importacoes || [], [resumo]);
 
   if (carregando) {
@@ -249,6 +330,9 @@ export default function AdminScreen({ navigation }) {
           </Pressable>
           <Pressable style={[styles.aba, aba === 'usuarios' && styles.abaAtiva]} onPress={() => setAba('usuarios')}>
             <Text style={[styles.abaTexto, aba === 'usuarios' && styles.abaTextoAtivo]}>Usuários</Text>
+          </Pressable>
+          <Pressable style={[styles.aba, aba === 'precos' && styles.abaAtiva]} onPress={() => setAba('precos')}>
+            <Text style={[styles.abaTexto, aba === 'precos' && styles.abaTextoAtivo]}>Preços</Text>
           </Pressable>
           <Pressable style={[styles.aba, aba === 'importacoes' && styles.abaAtiva]} onPress={() => setAba('importacoes')}>
             <Text style={[styles.abaTexto, aba === 'importacoes' && styles.abaTextoAtivo]}>Notas</Text>
@@ -310,6 +394,24 @@ export default function AdminScreen({ navigation }) {
                   <Text style={styles.salvarTexto}>{salvando ? 'Salvando' : 'Salvar'}</Text>
                 </Pressable>
               </View>
+              {editando && (
+                <View style={styles.mergeBox}>
+                  <Text style={styles.campoLabel}>Juntar este produto em outro ID</Text>
+                  <View style={styles.mergeLinha}>
+                    <TextInput
+                      style={styles.mergeInput}
+                      value={destinoMerge}
+                      onChangeText={setDestinoMerge}
+                      placeholder="ID do produto destino"
+                      placeholderTextColor={colors.inkMuted}
+                      autoCapitalize="none"
+                    />
+                    <Pressable style={styles.mergeBotao} onPress={juntarProdutoSelecionado} disabled={salvando}>
+                      <Ionicons name="git-merge-outline" size={17} color={colors.white} />
+                    </Pressable>
+                  </View>
+                </View>
+              )}
             </View>
 
             <Text style={styles.secao}>Produtos encontrados</Text>
@@ -340,8 +442,11 @@ export default function AdminScreen({ navigation }) {
         {aba === 'usuarios' && (
           <>
             <Text style={styles.secao}>Usuários</Text>
+            {!superadmin && (
+              <Text style={styles.vazio}>Somente superadmin pode alterar permissões.</Text>
+            )}
             {usuarios.map((usuario) => {
-              const admin = usuario.papel === 'admin';
+              const admin = usuario.papel === 'admin' || usuario.papel === 'superadmin';
               return (
                 <View key={usuario.id} style={styles.usuarioRow}>
                   <View style={styles.usuarioAvatar}>
@@ -353,13 +458,54 @@ export default function AdminScreen({ navigation }) {
                   </View>
                   <Pressable
                     style={[styles.papelBotao, admin && styles.papelBotaoAdmin]}
-                    onPress={() => alterarPapel(usuario, admin ? 'usuario' : 'admin')}
+                    onPress={() => superadmin && alterarPapel(usuario, admin ? 'usuario' : 'admin')}
+                    disabled={!superadmin}
                   >
-                    <Text style={[styles.papelTexto, admin && styles.papelTextoAdmin]}>{admin ? 'Admin' : 'Usuário'}</Text>
+                    <Text style={[styles.papelTexto, admin && styles.papelTextoAdmin]}>{usuario.papel === 'superadmin' ? 'Super' : admin ? 'Admin' : 'Usuário'}</Text>
                   </Pressable>
                 </View>
               );
             })}
+          </>
+        )}
+
+        {aba === 'precos' && (
+          <>
+            <Text style={styles.secao}>Últimos preços</Text>
+            {precoEditando && (
+              <View style={styles.editor}>
+                <Text style={styles.editorTitulo}>{precoEditando.produto || 'Produto'}</Text>
+                <Text style={styles.produtoMeta}>{precoEditando.estabelecimento || 'Estabelecimento'} · {precoEditando.data ? new Date(precoEditando.data).toLocaleString('pt-BR') : ''}</Text>
+                <View style={styles.mergeLinha}>
+                  <TextInput
+                    style={styles.mergeInput}
+                    value={precoValor}
+                    onChangeText={setPrecoValor}
+                    keyboardType="decimal-pad"
+                    placeholder="Valor"
+                    placeholderTextColor={colors.inkMuted}
+                  />
+                  <Pressable style={styles.salvar} onPress={salvarPreco} disabled={salvando}>
+                    <Ionicons name="save-outline" size={17} color={colors.white} />
+                    <Text style={styles.salvarTexto}>Salvar</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+            {precos.map((preco) => (
+              <Pressable key={preco.id} style={styles.importacaoRow} onPress={() => selecionarPreco(preco)}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.importacaoStatus}>{preco.produto || 'Produto'}</Text>
+                  <Text style={styles.importacaoMeta} numberOfLines={1}>
+                    {preco.estabelecimento || 'Local'} · {preco.data ? new Date(preco.data).toLocaleDateString('pt-BR') : ''}
+                  </Text>
+                </View>
+                <Text style={styles.importacaoTempo}>{formatBRL(preco.valor)}</Text>
+                <Pressable onPress={() => confirmarRemocaoPreco(preco)} hitSlop={8}>
+                  <Ionicons name="trash-outline" size={17} color={colors.danger} />
+                </Pressable>
+              </Pressable>
+            ))}
           </>
         )}
 
@@ -445,6 +591,10 @@ const styles = StyleSheet.create({
   removerTexto: { fontFamily: fonts.semibold, fontSize: 13, color: colors.danger },
   salvar: { minWidth: 112, height: 42, borderRadius: radius.md, backgroundColor: colors.brand, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 14 },
   salvarTexto: { fontFamily: fonts.semibold, fontSize: 13, color: colors.white },
+  mergeBox: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 12, paddingTop: 10 },
+  mergeLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  mergeInput: { flex: 1, minHeight: 42, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.canvas, paddingHorizontal: 10, fontFamily: fonts.body, fontSize: 13, color: colors.ink },
+  mergeBotao: { width: 44, height: 42, borderRadius: radius.md, backgroundColor: colors.brandDark, alignItems: 'center', justifyContent: 'center' },
   secao: { fontFamily: fonts.display, fontSize: 16, color: colors.ink, marginTop: 18, marginBottom: 10 },
   produtoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 10, marginBottom: 8 },
   produtoImg: { width: 40, height: 40, borderRadius: radius.sm, backgroundColor: '#F1F0EA', alignItems: 'center', justifyContent: 'center' },

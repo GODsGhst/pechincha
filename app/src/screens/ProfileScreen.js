@@ -106,16 +106,16 @@ export default function ProfileScreen({ navigation }) {
         <View style={{ flex: 1 }}>
           <Text style={styles.nome}>{usuario?.nome || 'Você'}</Text>
           <Text style={styles.email}>{usuario?.email}</Text>
-          {usuario?.papel === 'admin' && (
+          {['admin', 'superadmin'].includes(usuario?.papel) && (
             <View style={styles.adminPill}>
               <Ionicons name="shield-checkmark" size={12} color={colors.brandDark} />
-              <Text style={styles.adminPillTexto}>admin</Text>
+              <Text style={styles.adminPillTexto}>{usuario.papel}</Text>
             </View>
           )}
         </View>
       </View>
 
-      {usuario?.papel === 'admin' && (
+      {['admin', 'superadmin'].includes(usuario?.papel) && (
         <Pressable style={styles.adminCard} onPress={() => navigation.navigate('Admin')}>
           <View style={styles.adminIcone}>
             <Ionicons name="construct-outline" size={20} color={colors.brandDark} />

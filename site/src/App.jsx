@@ -53,6 +53,10 @@ function productMeta(product) {
     .join(' · ');
 }
 
+function isAdminRole(role) {
+  return role === 'admin' || role === 'superadmin';
+}
+
 function ProductThumb({ uri, compact = false, iconSize = 18 }) {
   const [failed, setFailed] = useState(false);
   const showImage = Boolean(uri) && !failed;
@@ -74,15 +78,47 @@ function ProductThumb({ uri, compact = false, iconSize = 18 }) {
 
 function LoginView({ onLogin }) {
   const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ nome: '', email: '', senha: '' });
+  const [form, setForm] = useState({ nome: '', email: '', senha: '', token: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const email = params.get('email');
+    const token = params.get('token');
+    if (email || token) {
+      setForm((prev) => ({ ...prev, email: email || prev.email, token: token || prev.token }));
+      setMode('reset');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   async function submit(event) {
     event.preventDefault();
     setLoading(true);
     setError('');
+    setNotice('');
     try {
+      if (mode === 'forgot') {
+        const data = await api.post('/auth/forgot-password', { email: form.email });
+        setNotice(data.message || 'Verifique seu e-mail para redefinir a senha.');
+        if (data.reset_token_dev) setForm((prev) => ({ ...prev, token: data.reset_token_dev }));
+        setMode('reset');
+        return;
+      }
+      if (mode === 'reset') {
+        const data = await api.post('/auth/reset-password', {
+          email: form.email,
+          token: form.token,
+          senha: form.senha
+        });
+        setNotice(data.message || 'Senha redefinida. Entre com a nova senha.');
+        setForm((prev) => ({ ...prev, senha: '', token: '' }));
+        setMode('login');
+        return;
+      }
+
       const path = mode === 'login' ? '/auth/login' : '/auth/register';
       const body = mode === 'login'
         ? { email: form.email, senha: form.senha }
@@ -111,6 +147,7 @@ function LoginView({ onLogin }) {
         <div className="switcher" role="tablist">
           <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">Entrar</button>
           <button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')} type="button">Criar conta</button>
+          <button className={mode === 'forgot' || mode === 'reset' ? 'active' : ''} onClick={() => setMode('forgot')} type="button">Esqueci</button>
         </div>
 
         <form className="auth-form" onSubmit={submit}>
@@ -142,14 +179,26 @@ function LoginView({ onLogin }) {
               onChange={(e) => setForm((prev) => ({ ...prev, senha: e.target.value }))}
               type="password"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              minLength={mode === 'register' ? 8 : undefined}
-              required
+              minLength={mode === 'register' || mode === 'reset' ? 8 : undefined}
+              required={mode !== 'forgot'}
             />
           </label>
+          {mode === 'reset' && (
+            <label>
+              Código de recuperação
+              <input
+                value={form.token}
+                onChange={(e) => setForm((prev) => ({ ...prev, token: e.target.value }))}
+                autoComplete="one-time-code"
+                required
+              />
+            </label>
+          )}
+          {notice && <div className="success-line">{notice}</div>}
           {error && <div className="error-line"><CircleAlert size={16} />{error}</div>}
           <button className="primary full" disabled={loading} type="submit">
             <UserRound size={17} />
-            {loading ? 'Aguarde' : mode === 'login' ? 'Entrar' : 'Criar conta'}
+            {loading ? 'Aguarde' : mode === 'login' ? 'Entrar' : mode === 'register' ? 'Criar conta' : mode === 'forgot' ? 'Enviar e-mail' : 'Redefinir senha'}
           </button>
         </form>
       </section>
@@ -515,7 +564,7 @@ function Dashboard({ usuario, onLogout, onOpenAdmin }) {
             <LogOut size={17} />
             Sair
           </button>
-          {usuario?.papel === 'admin' && (
+          {isAdminRole(usuario?.papel) && (
             <button className="primary" onClick={onOpenAdmin} type="button">
               <Shield size={17} />
               Admin
@@ -750,12 +799,16 @@ function AdminPanel({ usuario, onBack, onLogout }) {
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [products, setProducts] = useState([]);
+  const [prices, setPrices] = useState([]);
   const [stores, setStores] = useState([]);
   const [productQuery, setProductQuery] = useState('');
   const [productForm, setProductForm] = useState(emptyProductForm);
+  const [priceForm, setPriceForm] = useState({ id: null, valor: '' });
+  const [mergeTargetId, setMergeTargetId] = useState('');
   const [storeForm, setStoreForm] = useState(emptyStoreForm);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const superadmin = usuario?.papel === 'superadmin';
 
   const loadSummary = useCallback(async () => {
     try {
@@ -801,12 +854,22 @@ function AdminPanel({ usuario, onBack, onLogout }) {
     }
   }, []);
 
+  const loadPrices = useCallback(async () => {
+    try {
+      const data = await api.get('/admin/precos?limite=80');
+      setPrices(data.precos || []);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível carregar preços.');
+    }
+  }, []);
+
   useEffect(() => {
     loadSummary();
     loadUsers();
     loadAudit();
     loadStores();
-  }, [loadSummary, loadUsers, loadAudit, loadStores]);
+    loadPrices();
+  }, [loadSummary, loadUsers, loadAudit, loadStores, loadPrices]);
 
   useEffect(() => {
     const timeout = setTimeout(loadProducts, 250);
@@ -829,6 +892,11 @@ function AdminPanel({ usuario, onBack, onLogout }) {
       imagem_url: product.imagem_url || '',
       imagem_credito: product.imagem_credito || ''
     });
+  }
+
+  function editPrice(price) {
+    setPriceForm({ id: price.id, valor: String(price.valor || '') });
+    setTab('precos');
   }
 
   function editStore(store) {
@@ -859,10 +927,68 @@ function AdminPanel({ usuario, onBack, onLogout }) {
       if (productForm.id) await api.put(`/produtos/${productForm.id}`, body);
       else await api.post('/produtos', body);
       setProductForm(emptyProductForm);
+      setMergeTargetId('');
       setMessage('Produto salvo.');
       await Promise.all([loadProducts(), loadSummary()]);
     } catch (err) {
       setMessage(err.message || 'Não foi possível salvar produto.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function mergeProduct() {
+    if (!productForm.id || !mergeTargetId.trim()) {
+      setMessage('Escolha o produto de origem e informe o ID destino.');
+      return;
+    }
+    if (!window.confirm('Juntar este produto no produto destino? O histórico será movido e a origem removida.')) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      await api.post('/admin/produtos/juntar', {
+        origem_id: productForm.id,
+        destino_id: mergeTargetId.trim()
+      });
+      setProductForm(emptyProductForm);
+      setMergeTargetId('');
+      setMessage('Produtos juntados.');
+      await Promise.all([loadProducts(), loadPrices(), loadSummary()]);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível juntar produtos.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function savePrice(event) {
+    event.preventDefault();
+    if (!priceForm.id) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      await api.put(`/admin/precos/${priceForm.id}`, { valor: Number(String(priceForm.valor).replace(',', '.')) });
+      setPriceForm({ id: null, valor: '' });
+      setMessage('Preço atualizado.');
+      await Promise.all([loadPrices(), loadProducts(), loadSummary()]);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível salvar preço.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deletePrice(price) {
+    if (!window.confirm(`Remover preço ${money(price.valor)} de "${price.produto || 'produto'}"?`)) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      await api.delete(`/admin/precos/${price.id}`);
+      if (priceForm.id === price.id) setPriceForm({ id: null, valor: '' });
+      setMessage('Preço removido.');
+      await Promise.all([loadPrices(), loadProducts(), loadSummary()]);
+    } catch (err) {
+      setMessage(err.message || 'Não foi possível remover preço.');
     } finally {
       setLoading(false);
     }
@@ -926,6 +1052,10 @@ function AdminPanel({ usuario, onBack, onLogout }) {
   }
 
   async function updateUserRole(user, role) {
+    if (!superadmin) {
+      setMessage('Somente superadmin pode alterar permissões.');
+      return;
+    }
     setMessage('');
     try {
       const updated = await api.put(`/admin/usuarios/${user.id}/papel`, { papel: role });
@@ -975,6 +1105,10 @@ function AdminPanel({ usuario, onBack, onLogout }) {
               <Building2 size={17} />
               Estabelecimentos
             </button>
+            <button className={tab === 'precos' ? 'active' : ''} onClick={() => setTab('precos')} type="button">
+              <ReceiptText size={17} />
+              Preços
+            </button>
             <button className={tab === 'usuarios' ? 'active' : ''} onClick={() => setTab('usuarios')} type="button">
               <Users size={17} />
               Usuários
@@ -1000,8 +1134,8 @@ function AdminPanel({ usuario, onBack, onLogout }) {
         <section className="admin-content">
           <div className="panel-head">
             <div>
-              <h2>{tab === 'produtos' ? 'Produtos' : tab === 'lojas' ? 'Estabelecimentos' : 'Usuários'}</h2>
-              <p>Permissões e dados protegidos por conta admin</p>
+              <h2>{tab === 'produtos' ? 'Produtos' : tab === 'lojas' ? 'Estabelecimentos' : tab === 'precos' ? 'Preços' : 'Usuários'}</h2>
+              <p>{superadmin ? 'Acesso total de superadmin' : 'Produtos, preços e dados operacionais'}</p>
             </div>
             <button className="ghost icon-only" onClick={() => {
               loadSummary();
@@ -1009,6 +1143,7 @@ function AdminPanel({ usuario, onBack, onLogout }) {
               loadAudit();
               loadProducts();
               loadStores();
+              loadPrices();
             }} type="button">
               <RefreshCw size={17} />
             </button>
@@ -1044,9 +1179,42 @@ function AdminPanel({ usuario, onBack, onLogout }) {
                 <label>Marca<input value={productForm.marca} onChange={(e) => setProductForm((p) => ({ ...p, marca: e.target.value }))} /></label>
                 <label>Quantidade<input value={productForm.quantidade} onChange={(e) => setProductForm((p) => ({ ...p, quantidade: e.target.value }))} placeholder="2L, 500ml, 5kg" /></label>
                 <label>Imagem URL<input value={productForm.imagem_url} onChange={(e) => setProductForm((p) => ({ ...p, imagem_url: e.target.value }))} /></label>
+                {productForm.id && (
+                  <div className="merge-box">
+                    <label>ID destino para junção<input value={mergeTargetId} onChange={(e) => setMergeTargetId(e.target.value)} placeholder="Produto que vai receber este histórico" /></label>
+                    <button className="ghost" onClick={mergeProduct} disabled={loading} type="button">Juntar produtos</button>
+                  </div>
+                )}
                 <div className="form-actions">
                   <button className="ghost" onClick={() => setProductForm(emptyProductForm)} type="button">Limpar</button>
                   <button className="primary" disabled={loading} type="submit"><Save size={16} />Salvar</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {tab === 'precos' && (
+            <div className="admin-grid">
+              <div className="admin-rows">
+                {prices.map((price) => (
+                  <article className="admin-row" key={price.id}>
+                    <div>
+                      <h3>{price.produto || 'Produto'}</h3>
+                      <p>{price.estabelecimento || 'Local'} · {shortDate(price.data)} · {price.id}</p>
+                    </div>
+                    <strong>{money(price.valor)}</strong>
+                    <button className="ghost icon-only" onClick={() => editPrice(price)} type="button"><Edit3 size={16} /></button>
+                    <button className="trash-button" onClick={() => deletePrice(price)} type="button"><Trash2 size={16} /></button>
+                  </article>
+                ))}
+              </div>
+              <form className="admin-form" onSubmit={savePrice}>
+                <h3>Editar preço</h3>
+                <label>ID do preço<input value={priceForm.id || ''} readOnly /></label>
+                <label>Valor<input value={priceForm.valor} onChange={(e) => setPriceForm((p) => ({ ...p, valor: e.target.value }))} required /></label>
+                <div className="form-actions">
+                  <button className="ghost" onClick={() => setPriceForm({ id: null, valor: '' })} type="button">Limpar</button>
+                  <button className="primary" disabled={loading || !priceForm.id} type="submit"><Save size={16} />Salvar</button>
                 </div>
               </form>
             </div>
@@ -1091,9 +1259,10 @@ function AdminPanel({ usuario, onBack, onLogout }) {
                     <h3>{item.nome}</h3>
                     <p>{item.email} · criado em {shortDate(item.criado_em)}</p>
                   </div>
-                  <select value={item.papel} onChange={(e) => updateUserRole(item, e.target.value)}>
+                  <select value={item.papel} onChange={(e) => updateUserRole(item, e.target.value)} disabled={!superadmin}>
                     <option value="usuario">Usuário</option>
                     <option value="admin">Admin</option>
+                    <option value="superadmin">Superadmin</option>
                   </select>
                 </article>
               ))}
@@ -1154,7 +1323,7 @@ export default function App() {
     return <LoginView onLogin={setUsuario} />;
   }
 
-  if (usuario.papel === 'admin' && view === 'admin') {
+  if (isAdminRole(usuario.papel) && view === 'admin') {
     return <AdminPanel usuario={usuario} onBack={() => setView('app')} onLogout={() => setUsuario(null)} />;
   }
 

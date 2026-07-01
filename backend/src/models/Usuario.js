@@ -4,7 +4,7 @@ const usuarioSchema = new mongoose.Schema({
   nome:      { type: String, required: true, trim: true },
   email:     { type: String, required: true, unique: true, lowercase: true, trim: true },
   senha:     { type: String, required: true, select: false }, // armazenada com bcrypt
-  papel:     { type: String, enum: ['usuario', 'admin'], default: 'usuario' },
+  papel:     { type: String, enum: ['usuario', 'admin', 'superadmin'], default: 'usuario' },
   login: {
     tentativas_falhas: { type: Number, default: 0, select: false },
     bloqueado_ate:    { type: Date, default: null, select: false },

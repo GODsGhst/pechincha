@@ -11,5 +11,9 @@ router.get('/resumo', adminController.resumo);
 router.get('/auditoria', adminController.auditoria);
 router.get('/usuarios', adminController.listarUsuarios);
 router.put('/usuarios/:id/papel', adminController.atualizarPapelUsuario);
+router.get('/precos', adminController.listarPrecos);
+router.put('/precos/:id', adminController.atualizarPreco);
+router.delete('/precos/:id', adminController.removerPreco);
+router.post('/produtos/juntar', adminController.juntarProdutos);
 
 module.exports = router;

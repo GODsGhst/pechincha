@@ -5,15 +5,16 @@ const Usuario = require('../src/models/Usuario');
 
 async function main() {
   const email = String(process.argv[2] || '').trim().toLowerCase();
-  if (!email) {
-    console.error('Uso: node scripts/promoverAdmin.js email@exemplo.com');
+  const papel = String(process.argv[3] || 'admin').trim().toLowerCase();
+  if (!email || !['admin', 'superadmin'].includes(papel)) {
+    console.error('Uso: node scripts/promoverAdmin.js email@exemplo.com [admin|superadmin]');
     process.exit(1);
   }
 
   await connectDB();
   const usuario = await Usuario.findOneAndUpdate(
     { email },
-    { $set: { papel: 'admin' } },
+    { $set: { papel } },
     { new: true }
   ).select('nome email papel');
 
@@ -23,7 +24,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Admin liberado: ${usuario.nome} <${usuario.email}> (${usuario.papel})`);
+  console.log(`Permissão liberada: ${usuario.nome} <${usuario.email}> (${usuario.papel})`);
   await mongoose.disconnect();
 }
 

@@ -216,6 +216,14 @@ async function main() {
   verificar(adminLogin.status === 200 && adminLogin.json.usuario.papel === 'admin', 'login admin retorna papel admin');
   const adminToken = adminLogin.json.token;
 
+  const superReg = await req('POST', '/auth/register', { nome: 'Super Admin', email: 'super@email.com', senha: 'senha123' });
+  verificar(superReg.status === 201, 'cria usuário que será promovido a superadmin');
+  await Usuario.updateOne({ email: 'super@email.com' }, { $set: { papel: 'superadmin' } });
+  const superLogin = await req('POST', '/auth/login', { email: 'super@email.com', senha: 'senha123' });
+  verificar(superLogin.status === 200 && superLogin.json.usuario.papel === 'superadmin',
+    'login superadmin retorna papel superadmin');
+  const superToken = superLogin.json.token;
+
   const resumoUsuario = await req('GET', '/admin/resumo', null, token);
   verificar(resumoUsuario.status === 403, 'usuário comum não acessa painel admin');
 
@@ -228,8 +236,17 @@ async function main() {
     'admin lista usuários');
 
   const adminUser = usuariosAdmin.json.usuarios.find((u) => u.email === 'admin@email.com');
-  const removerUltimoAdmin = await req('PUT', `/admin/usuarios/${adminUser.id}/papel`, { papel: 'usuario' }, adminToken);
-  verificar(removerUltimoAdmin.status === 400, 'não remove o último administrador');
+  const adminAlteraPapel = await req('PUT', `/admin/usuarios/${adminUser.id}/papel`, { papel: 'usuario' }, adminToken);
+  verificar(adminAlteraPapel.status === 403, 'admin comum não altera papéis');
+
+  const superUser = usuariosAdmin.json.usuarios.find((u) => u.email === 'super@email.com');
+  const removerUltimoSuper = await req('PUT', `/admin/usuarios/${superUser.id}/papel`, { papel: 'admin' }, superToken);
+  verificar(removerUltimoSuper.status === 400, 'não remove o último superadmin');
+
+  const superAlteraPapel = await req('PUT', `/admin/usuarios/${adminUser.id}/papel`, { papel: 'usuario' }, superToken);
+  verificar(superAlteraPapel.status === 200 && superAlteraPapel.json.papel === 'usuario',
+    'superadmin altera papel de usuário');
+  await Usuario.updateOne({ email: 'admin@email.com' }, { $set: { papel: 'admin' } });
 
   console.log('\n--- Processamento de NFC-e ---');
   const semToken = await req('POST', '/nfce/processar', { html: HTML_SUPERMERCADO_ABC });

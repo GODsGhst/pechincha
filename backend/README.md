@@ -39,6 +39,12 @@ npm start
 | `CORS_ORIGIN` | Origens permitidas em produção (separadas por vírgula) | todas |
 | `PASSWORD_RESET_BASE_URL` | URL usada para montar link de redefinição de senha | — |
 | `PASSWORD_RESET_EXPOSE_TOKEN` | Expor token de reset no JSON (somente dev/teste) | `false` |
+| `SMTP_HOST` | Host SMTP para enviar e-mail de recuperação | — |
+| `SMTP_PORT` | Porta SMTP | `587` |
+| `SMTP_SECURE` | `true` para SMTP com TLS direto | `false` |
+| `SMTP_USER` | Usuário SMTP | — |
+| `SMTP_PASS` | Senha/token SMTP | — |
+| `EMAIL_FROM` | Remetente exibido nos e-mails | `SMTP_USER` |
 
 > Para não perder notas ao reiniciar, use `npm run dev:persist` ou configure um
 > `MONGODB_URI` real e rode `npm run dev`. O comando `npm run dev:demo` é
@@ -56,9 +62,9 @@ npm start
 
 O login tem limite por IP, limite por e-mail e bloqueio temporário da conta
 após tentativas repetidas de senha. A recuperação de senha salva apenas o hash
-do token temporário no banco. Em desenvolvimento/teste o token pode voltar no
-JSON para facilitar a apresentação; em produção não exponha esse token e
-entregue-o por e-mail ou outro canal verificado.
+do token temporário no banco e envia as instruções por e-mail quando o SMTP está
+configurado. Em desenvolvimento/teste o token pode voltar no JSON para facilitar
+a apresentação; em produção não exponha esse token.
 
 ### NFC-e
 | Método | Rota | Auth |
@@ -149,7 +155,24 @@ pelo parâmetro `visao`:
   aparecem com `cobertura_completa: false`.
 - **`visao=unitario`** — item por item: valor pago, menor preço atual,
   onde ele está e a economia unitária/total. Inclui um `resumo` com
-  `valor_pago`, `valor_minimo_possivel` e `economia_potencial`.
+`valor_pago`, `valor_minimo_possivel` e `economia_potencial`.
+
+### Administração
+| Método | Rota | Auth |
+|---|---|---|
+| GET | `/api/admin/resumo` | Admin |
+| GET | `/api/admin/usuarios` | Admin |
+| PUT | `/api/admin/usuarios/:id/papel` | Superadmin |
+| GET | `/api/admin/precos` | Admin |
+| PUT | `/api/admin/precos/:id` | Admin |
+| DELETE | `/api/admin/precos/:id` | Admin |
+| POST | `/api/admin/produtos/juntar` | Admin |
+| GET | `/api/admin/auditoria` | Admin |
+
+Use `npm run admin:promote -- email@exemplo.com superadmin` para promover o
+primeiro super administrador. Administradores podem verificar e corrigir
+produtos, preços, estabelecimentos e junções; super administradores também
+podem alterar permissões de usuários.
 
 Rotas autenticadas exigem o header `Authorization: Bearer <token>`.
 

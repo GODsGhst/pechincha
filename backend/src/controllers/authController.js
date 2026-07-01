@@ -6,6 +6,7 @@ const Compra = require('../models/Compra');
 const ImportacaoNfce = require('../models/ImportacaoNfce');
 const ListaCompra = require('../models/ListaCompra');
 const compraService = require('../services/compraService');
+const emailService = require('../services/emailService');
 
 const SALT_ROUNDS = 10;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -68,13 +69,17 @@ function montarResetUrl(email, token) {
   }
 }
 
-function registrarInstrucaoReset(usuario, token) {
+async function registrarInstrucaoReset(usuario, token) {
   const resetUrl = montarResetUrl(usuario.email, token);
   if (resetDevHabilitado()) {
     console.info(`[reset-senha] ${usuario.email} token=${token}${resetUrl ? ` url=${resetUrl}` : ''}`);
-    return;
   }
-  console.info(`[reset-senha] Token gerado para ${usuario.email}. Configure um serviço de e-mail para entrega.`);
+  await emailService.enviarResetSenha({
+    email: usuario.email,
+    nome: usuario.nome,
+    token,
+    resetUrl
+  });
 }
 
 function loginBloqueado(usuario) {
@@ -211,7 +216,7 @@ async function forgotPassword(req, res, next) {
         solicitado_em: new Date()
       };
       await usuario.save();
-      registrarInstrucaoReset(usuario, token);
+      await registrarInstrucaoReset(usuario, token);
 
       if (resetDevHabilitado()) {
         payload.reset_token_dev = token;
@@ -287,10 +292,10 @@ async function removerConta(req, res, next) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
-    if (usuario.papel === 'admin') {
+    if (['admin', 'superadmin'].includes(usuario.papel)) {
       const outrosAdmins = await Usuario.countDocuments({
         _id: { $ne: usuario._id },
-        papel: 'admin'
+        papel: { $in: ['admin', 'superadmin'] }
       });
       if (outrosAdmins === 0) {
         return res.status(400).json({ error: 'Não é possível excluir o último administrador' });

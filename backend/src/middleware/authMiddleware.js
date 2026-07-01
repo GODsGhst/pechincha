@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
+function papelValido(papel) {
+  return ['usuario', 'admin', 'superadmin'].includes(papel) ? papel : 'usuario';
+}
+
 function authMiddleware(req, res, next) {
   const header = req.headers.authorization || '';
   const [esquema, token] = header.split(' ');
@@ -16,7 +20,7 @@ function authMiddleware(req, res, next) {
     }
     req.usuario = {
       id: payload.id,
-      papel: payload.papel === 'admin' ? 'admin' : 'usuario'
+      papel: papelValido(payload.papel)
     };
     return next();
   } catch (_err) {

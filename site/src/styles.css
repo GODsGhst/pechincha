@@ -222,6 +222,12 @@ select:focus {
   font-size: 13px;
 }
 
+.success-line {
+  color: #0f6b4a;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .app-shell {
   min-height: 100vh;
   padding: 18px;
@@ -873,6 +879,14 @@ select:focus {
 .admin-form {
   display: grid;
   gap: 12px;
+}
+
+.merge-box {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 4px;
 }
 
 .coord-grid {
