@@ -574,7 +574,7 @@ async function buscarProdutosSemNome(filtros) {
 
 async function buscarProdutosPorNome(nome, filtros, limite = 50) {
   const encontradosGrafo = await productGraphService.buscarProdutos(nome, filtros, { limite });
-  if (encontradosGrafo.length >= 3) return encontradosGrafo;
+  if (encontradosGrafo.length > 0) return encontradosGrafo;
 
   const encontradosNormalizador = await productNormalizer.buscarProdutos(nome, filtros);
   return mesclarProdutos(encontradosGrafo, encontradosNormalizador).slice(0, limite);
