@@ -93,7 +93,7 @@ app.get('/', (_req, res) => {
   res.json({ message: 'API do Comparador de Preços por Cupons Fiscais', versao: '1.0.0' });
 });
 
-app.get('/health', (_req, res) => {
+function healthcheck(_req, res) {
   const conectado = mongoose.connection.readyState === 1;
   res.status(conectado ? 200 : 503).json({
     status: conectado ? 'ok' : 'degraded',
@@ -101,7 +101,10 @@ app.get('/health', (_req, res) => {
     uptime_seconds: Math.round(process.uptime()),
     timestamp: new Date().toISOString()
   });
-});
+}
+
+app.get('/health', healthcheck);
+app.get('/api/health', healthcheck);
 
 app.use('/api', rateLimit({
   nome: 'api',
