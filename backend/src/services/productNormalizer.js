@@ -29,6 +29,7 @@ const TOKENS_FABRICANTE = new Set([
 
 const CATEGORIAS = [
   { categoria: 'Alimentos', aliases: ['alimento', 'alimentos', 'mercearia'] },
+  { categoria: 'Padaria', aliases: ['padaria', 'panificacao', 'panificação'] },
   { categoria: 'Bebidas', aliases: ['bebida', 'bebidas'] },
   { categoria: 'Limpeza', aliases: ['limpeza'] },
   { categoria: 'Higiene', aliases: ['higiene', 'perfumaria'] },
@@ -74,6 +75,10 @@ const TIPOS = [
   { tipo: 'Farinha', categoria: 'Alimentos', aliases: ['farinha'] },
   { tipo: 'Biscoito', categoria: 'Alimentos', aliases: ['biscoito', 'bolacha'] },
   { tipo: 'Molho', categoria: 'Alimentos', aliases: ['molho', 'extrato tomate'] },
+  { tipo: 'Pão de Sal', categoria: 'Padaria', aliases: ['pao de sal', 'pão de sal', 'sal pao', 'sal pão'] },
+  { tipo: 'Pão Francês', categoria: 'Padaria', aliases: ['pao frances', 'pão francês', 'paozinho frances', 'pãozinho francês'] },
+  { tipo: 'Pão de Forma', categoria: 'Padaria', aliases: ['pao de forma', 'pão de forma'] },
+  { tipo: 'Pão', categoria: 'Padaria', aliases: ['pao', 'pão', 'paozinho', 'pãozinho'] },
   { tipo: 'Sal', categoria: 'Alimentos', aliases: ['sal'] },
   { tipo: 'Iogurte', categoria: 'Alimentos', aliases: ['iogurte', 'beb lactea', 'lactea'] },
   { tipo: 'Bala', categoria: 'Alimentos', aliases: ['bala', 'drops', 'azedo', 'azedinho'] },
@@ -168,6 +173,11 @@ const TIPO_PADRAO_POR_MARCA = new Map([
   ['Nutella', 'Chocolate'],
   ['Lacta', 'Chocolate'],
   ['Garoto', 'Chocolate']
+]);
+
+const TIPOS_CANONICOS_SEM_TAMANHO = new Set([
+  'Pão de Sal',
+  'Pão Francês'
 ]);
 
 function normalizarTexto(texto) {
@@ -427,6 +437,7 @@ function analisarProduto(nomeBruto, sobrescritas = {}) {
   const partes = [categoria, tipo, marca, ...quantidades, ...extras].filter(Boolean);
   const chave = partes.join('|').toLowerCase();
   const confiavel = Boolean(
+    (tipo && TIPOS_CANONICOS_SEM_TAMANHO.has(tipo)) ||
     (tipo && (marca || quantidades.length > 0 || extras.length > 0)) ||
     (marca && quantidades.length > 0) ||
     (categoria && tipo && extras.length > 0)

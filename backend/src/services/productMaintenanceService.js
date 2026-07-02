@@ -15,6 +15,19 @@ function textoAnaliseProduto(produto) {
   return [produto.nome, produto.quantidade].filter(Boolean).join(' ');
 }
 
+function analisarProdutoParaManutencao(produto) {
+  const texto = textoAnaliseProduto(produto);
+  const detectada = analisarProduto(texto);
+  const tipoDetectadoDiferente = detectada.tipo && detectada.tipo !== produto.tipo;
+  const marcaDetectadaDiferente = detectada.marca && detectada.marca !== produto.marca;
+
+  return analisarProduto(texto, {
+    categoria: tipoDetectadoDiferente ? undefined : produto.categoria || undefined,
+    tipo: tipoDetectadoDiferente ? undefined : produto.tipo || undefined,
+    marca: marcaDetectadaDiferente ? undefined : produto.marca || undefined
+  });
+}
+
 async function contarReferencias(produtoId) {
   const [historicos, compras, listas] = await Promise.all([
     HistoricoPreco.countDocuments({ produto_id: produtoId }),
@@ -37,11 +50,11 @@ function atualizacaoDoProduto(produto, analise) {
     nome: nomeExibicao,
     nome_normalizado: normalizarTexto(nomeExibicao),
     chave_dedup: analise.confiavel ? analise.chave : null,
-    categoria: produto.categoria || analise.categoria,
-    tipo: produto.tipo || analise.tipo,
-    marca: produto.marca || analise.marca,
-    quantidade: produto.quantidade || analise.quantidade,
-    quantidade_normalizada: produto.quantidade_normalizada || analise.quantidade_normalizada
+    categoria: analise.categoria || produto.categoria,
+    tipo: analise.tipo || produto.tipo,
+    marca: analise.marca || produto.marca,
+    quantidade: analise.quantidade || produto.quantidade,
+    quantidade_normalizada: analise.quantidade_normalizada || produto.quantidade_normalizada
   };
 }
 
@@ -112,9 +125,18 @@ async function garantirIndicesHistorico(aplicar) {
   const nomeIndice = 'idx_historico_produto_data_desc';
   const indexes = await HistoricoPreco.collection.indexes();
   const existente = indexes.find((index) => index.name === nomeIndice);
+  const mesmoFormato = indexes.find((index) =>
+    index.key &&
+    Object.keys(index.key).length === 2 &&
+    index.key.produto_id === 1 &&
+    index.key.data === -1
+  );
 
   if (existente) {
     return { status: 'existente', nome: nomeIndice };
+  }
+  if (mesmoFormato) {
+    return { status: 'existente-com-outro-nome', nome: mesmoFormato.name };
   }
 
   if (!aplicar) {
@@ -169,11 +191,7 @@ async function organizarProdutos({ aplicar = false } = {}) {
   const analisados = [];
 
   for (const produto of produtos) {
-    const analise = analisarProduto(textoAnaliseProduto(produto), {
-      categoria: produto.categoria || undefined,
-      tipo: produto.tipo || undefined,
-      marca: produto.marca || undefined
-    });
+    const analise = analisarProdutoParaManutencao(produto);
     const referencias = await contarReferencias(produto._id);
     analisados.push({ produto, analise, referencias });
   }

@@ -3,6 +3,8 @@
 
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const mongoose = require('mongoose');
+const Produto = require('../src/models/Produto');
+const { organizarProdutos } = require('../src/services/productMaintenanceService');
 const { encontrarOuCriarProduto, normalizarTexto, buscarProdutos, analisarProduto, formatarNomeProduto } = require('../src/services/productNormalizer');
 
 let ok = 0;
@@ -147,6 +149,32 @@ function check(cond, nome) {
     analiseDental.tipo === 'Creme dental' &&
     analiseDental.marca === 'Colgate',
     'creme dental Colgate entra como higiene');
+
+  check(formatarNomeProduto('SAL PAO') === 'Pão de Sal',
+    'produto legado "Sal Pão" é reformatado como Pão de Sal');
+
+  const legadoSalPao = await Produto.create({
+    nome: 'Sal Pão',
+    nome_normalizado: 'sal pao',
+    chave_dedup: null,
+    categoria: 'Alimentos',
+    tipo: 'Sal'
+  });
+  await organizarProdutos({ aplicar: true });
+  const legadoCorrigido = await Produto.findById(legadoSalPao._id);
+  check(legadoCorrigido.nome === 'Pão de Sal' &&
+    legadoCorrigido.categoria === 'Padaria' &&
+    legadoCorrigido.tipo === 'Pão de Sal' &&
+    legadoCorrigido.chave_dedup === 'padaria|pão de sal',
+    'manutenção corrige produto antigo Sal Pão');
+
+  const paoSal = await encontrarOuCriarProduto('PAO DE SAL');
+  check(paoSal.novo === false &&
+    String(paoSal.produto._id) === String(legadoCorrigido._id) &&
+    paoSal.produto.nome === 'Pão de Sal' &&
+    paoSal.produto.categoria === 'Padaria' &&
+    paoSal.produto.tipo === 'Pão de Sal',
+    'próximo pão de sal reaproveita produto bonito já corrigido');
 
   console.log('\n--- Busca tolerante ---');
   const busca = await buscarProdutos('arroz tio joao');

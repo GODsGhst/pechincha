@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { organizarProdutos } = require('./productMaintenanceService');
 
-const MANUTENCAO_PRODUTOS_VERSAO = 'product-normalizer-2026-07-01-v3';
+const MANUTENCAO_PRODUTOS_VERSAO = 'product-normalizer-2026-07-01-v4';
 const LOCK_EXPIRADO_MS = 15 * 60 * 1000;
 
 function manutencaoInicialHabilitada() {
