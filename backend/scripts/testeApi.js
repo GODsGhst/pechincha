@@ -177,8 +177,18 @@ async function main() {
 
   comAmbienteTemporario(ambienteBaseProducao, () => validarAmbiente());
   verificar(true, 'ambiente de produção válido passa nas travas obrigatórias');
-  verificar(ambienteFalha({ ...ambienteBaseProducao, SMTP_PASS: '' }, 'SMTP_HOST'),
-    'produção exige SMTP para recuperação de senha');
+  comAmbienteTemporario({
+    ...ambienteBaseProducao,
+    SMTP_HOST: '',
+    SMTP_USER: '',
+    SMTP_PASS: ''
+  }, () => validarAmbiente());
+  verificar(true, 'produção permite subir sem SMTP e desativa e-mails');
+  verificar(ambienteFalha({
+    ...ambienteBaseProducao,
+    REQUIRE_SMTP_IN_PRODUCTION: 'true',
+    SMTP_PASS: ''
+  }, 'SMTP_HOST'), 'produção pode exigir SMTP quando configurado');
   verificar(ambienteFalha({ ...ambienteBaseProducao, PASSWORD_RESET_EXPOSE_TOKEN: 'true' }, 'PASSWORD_RESET_EXPOSE_TOKEN'),
     'produção bloqueia exposição de token de reset');
   verificar(ambienteFalha({ ...ambienteBaseProducao, EMAIL_VERIFICATION_EXPOSE_TOKEN: 'true' }, 'EMAIL_VERIFICATION_EXPOSE_TOKEN'),

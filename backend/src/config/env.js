@@ -44,6 +44,10 @@ function smtpConfigurado() {
   return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 }
 
+function smtpObrigatorioEmProducao() {
+  return boolEnv(process.env.REQUIRE_SMTP_IN_PRODUCTION);
+}
+
 function validarAmbiente() {
   const emProducao = process.env.NODE_ENV === 'production';
 
@@ -84,11 +88,21 @@ function validarAmbiente() {
       throw new Error('EMAIL_VERIFICATION_EXPOSE_TOKEN não pode ser habilitado em produção');
     }
 
-    if (!smtpConfigurado()) {
+    const temAlgumSmtp = Boolean(process.env.SMTP_HOST || process.env.SMTP_USER || process.env.SMTP_PASS);
+    const temSmtpCompleto = smtpConfigurado();
+    if (!temSmtpCompleto && smtpObrigatorioEmProducao()) {
       throw new Error('SMTP_HOST, SMTP_USER e SMTP_PASS são obrigatórios em produção para recuperação de senha');
     }
 
-    if (!portaValida(process.env.SMTP_PORT)) {
+    if (!temSmtpCompleto) {
+      console.warn(
+        temAlgumSmtp
+          ? 'SMTP está incompleto; envio de e-mail ficará indisponível até configurar SMTP_HOST, SMTP_USER e SMTP_PASS.'
+          : 'SMTP não configurado; envio de e-mail ficará indisponível até configurar SMTP_HOST, SMTP_USER e SMTP_PASS.'
+      );
+    }
+
+    if (temSmtpCompleto && !portaValida(process.env.SMTP_PORT)) {
       throw new Error('SMTP_PORT inválida');
     }
   } else if (!segredoJwtValido(process.env.JWT_SECRET)) {
@@ -100,5 +114,6 @@ module.exports = {
   validarAmbiente,
   segredoJwtValido,
   urlHttpValida,
-  smtpConfigurado
+  smtpConfigurado,
+  smtpObrigatorioEmProducao
 };
