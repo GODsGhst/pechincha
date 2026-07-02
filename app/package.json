@@ -36,5 +36,8 @@
     "postcss": "8.5.10",
     "uuid": "11.1.1"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@expo/ngrok": "^4.1.3"
+  }
 }
