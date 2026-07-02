@@ -12,6 +12,8 @@
     "test:norm": "node scripts/testeNormalizador.js",
     "organize:products": "node scripts/organizarProdutos.js",
     "organize:products:apply": "node scripts/organizarProdutos.js --apply",
+    "graph:products": "node scripts/reindexarGrafoProdutos.js",
+    "graph:products:apply": "node scripts/reindexarGrafoProdutos.js --apply",
     "admin:promote": "node scripts/promoverAdmin.js",
     "seed": "node scripts/seedRemote.js"
   },

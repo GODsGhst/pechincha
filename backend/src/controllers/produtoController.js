@@ -6,6 +6,7 @@ const productImageService = require('../services/productImageService');
 const displayFormatter = require('../services/displayFormatter');
 const pricePresentation = require('../services/pricePresentationService');
 const cacheService = require('../services/cacheService');
+const productGraphService = require('../services/productGraphService');
 const { registrarAdminAudit } = require('../services/adminAuditService');
 
 const CACHE_TTL_MS = Math.max(Number(process.env.PRODUCT_CACHE_TTL_MS) || 2 * 60 * 1000, 5 * 1000);
@@ -571,6 +572,14 @@ async function buscarProdutosSemNome(filtros) {
     .slice(0, 100);
 }
 
+async function buscarProdutosPorNome(nome, filtros, limite = 50) {
+  const encontradosGrafo = await productGraphService.buscarProdutos(nome, filtros, { limite });
+  if (encontradosGrafo.length >= 3) return encontradosGrafo;
+
+  const encontradosNormalizador = await productNormalizer.buscarProdutos(nome, filtros);
+  return mesclarProdutos(encontradosGrafo, encontradosNormalizador).slice(0, limite);
+}
+
 // GET /api/produtos?nome=arroz&categoria=Alimentos&tipo=Arroz&marca=Tio%20João&quantidade=5kg
 async function listar(req, res, next) {
   try {
@@ -582,7 +591,7 @@ async function listar(req, res, next) {
     let produtos;
     if (req.query.nome) {
       // Busca tolerante (acentos, caixa, ordem das palavras, tokens faltando)
-      const encontrados = await productNormalizer.buscarProdutos(req.query.nome, filtros);
+      const encontrados = await buscarProdutosPorNome(req.query.nome, filtros);
       const ids = encontrados.map((p) => p._id);
       const populados = await Produto.find({ _id: { $in: ids } })
         .populate('ultimo_preco.estabelecimento_id', 'nome');
@@ -737,7 +746,7 @@ async function sugestoes(req, res, next) {
 
     let produtos = [];
     if (termo) {
-      produtos = await productNormalizer.buscarProdutos(termo, filtros);
+      produtos = await buscarProdutosPorNome(termo, filtros, limite * 3);
     } else {
       produtos = await buscarProdutosSemNome(filtros);
     }
@@ -851,6 +860,7 @@ async function criar(req, res, next) {
       imagem_url: imagemUrlSegura(imagem_url),
       imagem_credito: imagem_credito || null
     });
+    await productGraphService.indexarProduto(produto);
     limparCache();
     await registrarAdminAudit(req, {
       acao: 'produto.criar',
@@ -913,6 +923,7 @@ async function atualizar(req, res, next) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
 
+    await productGraphService.indexarProduto(produto);
     limparCache();
     await registrarAdminAudit(req, {
       acao: 'produto.atualizar',
@@ -940,6 +951,7 @@ async function remover(req, res, next) {
     }
 
     await HistoricoPreco.deleteMany({ produto_id: produto._id });
+    await productGraphService.removerProduto(produto._id);
     limparCache();
     await registrarAdminAudit(req, {
       acao: 'produto.remover',

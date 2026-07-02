@@ -4,6 +4,7 @@ const HistoricoPreco = require('../models/HistoricoPreco');
 const ListaCompra = require('../models/ListaCompra');
 const compraService = require('./compraService');
 const cacheService = require('./cacheService');
+const productGraphService = require('./productGraphService');
 const {
   analisarProduto,
   formatarNomeProduto,
@@ -154,6 +155,7 @@ async function mesclarGrupo(grupo, aplicar) {
       ]);
 
       await Produto.deleteOne({ _id: item.produto._id });
+      await productGraphService.removerProduto(item.produto._id);
     }
 
     await compraService.recalcularPrecos(principal.produto._id);
@@ -212,6 +214,7 @@ async function organizarProdutos({ aplicar = false } = {}) {
 
   const indiceChaveDedup = await garantirIndiceUnicoChaveDedup(aplicar);
   const indicesHistorico = await garantirIndicesHistorico(aplicar);
+  const grafoProdutos = await productGraphService.reindexarProdutos({ aplicar });
   if (aplicar && (atualizados > 0 || produtosRemovidos > 0)) {
     cacheService.clear('produtos');
   }
@@ -224,6 +227,7 @@ async function organizarProdutos({ aplicar = false } = {}) {
     produtos_duplicados_para_remover: produtosRemovidos,
     indice_chave_dedup: indiceChaveDedup,
     indices_historico: indicesHistorico,
+    grafo_produtos: grafoProdutos,
     exemplos: exemplos.slice(0, 10)
   };
 }

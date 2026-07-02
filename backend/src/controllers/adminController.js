@@ -10,6 +10,7 @@ const AdminAuditLog = require('../models/AdminAuditLog');
 const { registrarAdminAudit } = require('../services/adminAuditService');
 const compraService = require('../services/compraService');
 const { organizarProdutos } = require('../services/productMaintenanceService');
+const productGraphService = require('../services/productGraphService');
 
 function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -298,7 +299,9 @@ async function juntarProdutos(req, res, next) {
     ]);
 
     await Produto.deleteOne({ _id: origem._id });
+    await productGraphService.removerProduto(origem._id);
     await compraService.recalcularPrecos(destino._id);
+    await productGraphService.indexarProduto(destino);
     await registrarAdminAudit(req, {
       acao: 'produto.juntar',
       alvo_tipo: 'produto',
@@ -330,6 +333,26 @@ async function organizarProdutosAdmin(req, res, next) {
       resumo: dryRun
         ? 'Simulação de organização de produtos executada'
         : 'Organização de produtos executada',
+      dados: resultado
+    });
+
+    return res.json(resultado);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function reindexarGrafoProdutosAdmin(req, res, next) {
+  try {
+    const dryRun = (req.body || {}).dry_run === true;
+    const resultado = await productGraphService.reindexarProdutos({ aplicar: !dryRun });
+
+    await registrarAdminAudit(req, {
+      acao: dryRun ? 'produto.grafo_reindexar_dry_run' : 'produto.grafo_reindexar',
+      alvo_tipo: 'produto',
+      resumo: dryRun
+        ? 'Simulação de reindexação do grafo de produtos executada'
+        : 'Reindexação do grafo de produtos executada',
       dados: resultado
     });
 
@@ -381,5 +404,6 @@ module.exports = {
   atualizarPreco,
   removerPreco,
   juntarProdutos,
-  organizarProdutosAdmin
+  organizarProdutosAdmin,
+  reindexarGrafoProdutosAdmin
 };

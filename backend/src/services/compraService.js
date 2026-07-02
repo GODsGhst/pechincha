@@ -1,6 +1,7 @@
 const Produto = require('../models/Produto');
 const HistoricoPreco = require('../models/HistoricoPreco');
 const productNormalizer = require('./productNormalizer');
+const productGraphService = require('./productGraphService');
 const cacheService = require('./cacheService');
 
 // Deduplicação de produtos: delega ao normalizador (fuzzy matching com fuse.js),
@@ -10,7 +11,13 @@ function criarContextoProdutos() {
 }
 
 async function encontrarOuCriarProduto(nomeItem, contexto = null) {
-  return productNormalizer.encontrarOuCriarProduto(nomeItem, contexto);
+  const resultado = await productNormalizer.encontrarOuCriarProduto(nomeItem, contexto);
+  try {
+    await productGraphService.indexarProduto(resultado.produto);
+  } catch (err) {
+    console.warn('Falha ao indexar produto no grafo:', err.message);
+  }
+  return resultado;
 }
 
 // Registra o preço no histórico e atualiza menor_preco / ultimo_preco do produto
