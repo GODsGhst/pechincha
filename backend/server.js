@@ -4,6 +4,7 @@ const cluster = require('cluster');
 const os = require('os');
 const connectDB = require('./src/config/database');
 const { validarAmbiente } = require('./src/config/env');
+const { executarManutencaoInicial } = require('./src/services/startupMaintenanceService');
 
 const PORT = process.env.PORT || 3001;
 const WORKERS = Math.max(1, Math.min(
@@ -16,7 +17,16 @@ validarAmbiente();
 function iniciarWorker() {
   const app = require('./src/app');
   connectDB()
-    .then(() => {
+    .then(async () => {
+      try {
+        const manutencao = await executarManutencaoInicial();
+        if (manutencao.status !== 'desabilitada') {
+          console.log(`Manutenção inicial: ${JSON.stringify(manutencao)}`);
+        }
+      } catch (err) {
+        console.error('Manutenção inicial falhou:', err.message);
+      }
+
       app.listen(PORT, () => {
         console.log(`API rodando em http://localhost:${PORT} pid=${process.pid}`);
       });

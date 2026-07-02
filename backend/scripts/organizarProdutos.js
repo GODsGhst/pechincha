@@ -1,7 +1,8 @@
 // Organiza produtos já existentes no banco:
 // - preenche categoria/tipo/marca quando o normalizador consegue inferir
 // - padroniza caixa do nome de exibição
-// - junta duplicados com a mesma chave confiável, preservando compras e histórico
+// - junta duplicados com a mesma chave confiável, preservando compras,
+//   listas e histórico
 //
 // Dry-run: npm run organize:products
 // Aplicar: npm run organize:products:apply
@@ -9,150 +10,9 @@
 require('dotenv').config();
 
 const mongoose = require('mongoose');
-const Produto = require('../src/models/Produto');
-const Compra = require('../src/models/Compra');
-const HistoricoPreco = require('../src/models/HistoricoPreco');
-const compraService = require('../src/services/compraService');
-const { analisarProduto, formatarNomeProduto, normalizarTexto } = require('../src/services/productNormalizer');
+const { organizarProdutos } = require('../src/services/productMaintenanceService');
 
 const aplicar = process.argv.includes('--apply');
-
-async function contarReferencias(produtoId) {
-  const [historicos, compras] = await Promise.all([
-    HistoricoPreco.countDocuments({ produto_id: produtoId }),
-    Compra.countDocuments({ 'itens.produto_id': produtoId })
-  ]);
-  return historicos + compras;
-}
-
-function escolherPrincipal(grupo) {
-  return [...grupo].sort((a, b) => {
-    if (b.referencias !== a.referencias) return b.referencias - a.referencias;
-    return new Date(a.produto.criado_em || 0) - new Date(b.produto.criado_em || 0);
-  })[0];
-}
-
-async function atualizarProduto(produto, analise) {
-  const nomeExibicao = formatarNomeProduto(produto.nome, analise);
-  const atualizacao = {
-    nome: nomeExibicao,
-    nome_normalizado: normalizarTexto(nomeExibicao),
-    chave_dedup: analise.confiavel ? analise.chave : null,
-    categoria: produto.categoria || analise.categoria,
-    tipo: produto.tipo || analise.tipo,
-    marca: produto.marca || analise.marca,
-    quantidade: produto.quantidade || analise.quantidade,
-    quantidade_normalizada: produto.quantidade_normalizada || analise.quantidade_normalizada
-  };
-
-  const mudou = Object.entries(atualizacao).some(([chave, valor]) => {
-    const atual = produto[chave] === undefined ? null : produto[chave];
-    return String(atual || '') !== String(valor || '');
-  });
-
-  if (mudou && aplicar) {
-    await Produto.updateOne({ _id: produto._id }, { $set: atualizacao });
-  }
-
-  return { mudou, atualizacao };
-}
-
-function textoAnaliseProduto(produto) {
-  return [produto.nome, produto.quantidade].filter(Boolean).join(' ');
-}
-
-function indiceSimplesChaveDedup(index) {
-  return index &&
-    index.key &&
-    Object.keys(index.key).length === 1 &&
-    index.key.chave_dedup === 1;
-}
-
-async function garantirIndiceUnicoChaveDedup() {
-  const nomeIndice = 'uniq_produto_chave_dedup';
-  const indexes = await Produto.collection.indexes();
-  const indiceUnico = indexes.find((index) => indiceSimplesChaveDedup(index) && index.unique);
-
-  if (indiceUnico) {
-    return { status: 'existente', nome: indiceUnico.name };
-  }
-
-  const indiceAntigo = indexes.find((index) => index.name !== '_id_' && indiceSimplesChaveDedup(index));
-  if (!aplicar) {
-    return {
-      status: indiceAntigo ? 'dry-run-recriaria' : 'dry-run-criaria',
-      nome: indiceAntigo ? indiceAntigo.name : nomeIndice
-    };
-  }
-
-  if (indiceAntigo) {
-    await Produto.collection.dropIndex(indiceAntigo.name);
-  }
-
-  await Produto.collection.createIndex(
-    { chave_dedup: 1 },
-    {
-      name: nomeIndice,
-      unique: true,
-      partialFilterExpression: { chave_dedup: { $type: 'string' } },
-      background: true
-    }
-  );
-
-  return {
-    status: indiceAntigo ? 'recriado-como-unico' : 'criado',
-    nome: nomeIndice
-  };
-}
-
-async function garantirIndicesHistorico() {
-  const nomeIndice = 'idx_historico_produto_data_desc';
-  const indexes = await HistoricoPreco.collection.indexes();
-  const existente = indexes.find((index) => index.name === nomeIndice);
-
-  if (existente) {
-    return { status: 'existente', nome: nomeIndice };
-  }
-
-  if (!aplicar) {
-    return { status: 'dry-run-criaria', nome: nomeIndice };
-  }
-
-  await HistoricoPreco.collection.createIndex(
-    { produto_id: 1, data: -1 },
-    { name: nomeIndice, background: true }
-  );
-
-  return { status: 'criado', nome: nomeIndice };
-}
-
-async function mesclarGrupo(grupo) {
-  const principal = escolherPrincipal(grupo);
-  const duplicados = grupo.filter((item) => String(item.produto._id) !== String(principal.produto._id));
-
-  if (duplicados.length === 0) return { principal, duplicados: [] };
-
-  if (aplicar) {
-    for (const item of duplicados) {
-      await HistoricoPreco.updateMany(
-        { produto_id: item.produto._id },
-        { $set: { produto_id: principal.produto._id } }
-      );
-
-      await Compra.updateMany(
-        { 'itens.produto_id': item.produto._id },
-        { $set: { 'itens.$[item].produto_id': principal.produto._id } },
-        { arrayFilters: [{ 'item.produto_id': item.produto._id }] }
-      );
-
-      await Produto.deleteOne({ _id: item.produto._id });
-    }
-
-    await compraService.recalcularPrecos(principal.produto._id);
-  }
-
-  return { principal, duplicados };
-}
 
 async function main() {
   if (!process.env.MONGODB_URI) {
@@ -160,65 +20,8 @@ async function main() {
   }
 
   await mongoose.connect(process.env.MONGODB_URI);
-
-  const produtos = await Produto.find().sort({ criado_em: 1 });
-  const analisados = [];
-
-  for (const produto of produtos) {
-    const analise = analisarProduto(textoAnaliseProduto(produto), {
-      categoria: produto.categoria || undefined,
-      tipo: produto.tipo || undefined,
-      marca: produto.marca || undefined
-    });
-    const referencias = await contarReferencias(produto._id);
-    analisados.push({ produto, analise, referencias });
-  }
-
-  let atualizados = 0;
-  for (const item of analisados) {
-    const resultado = await atualizarProduto(item.produto, item.analise);
-    if (resultado.mudou) atualizados += 1;
-  }
-
-  const grupos = new Map();
-  for (const item of analisados) {
-    if (!item.analise.confiavel) continue;
-    const chave = item.analise.chave;
-    if (!grupos.has(chave)) grupos.set(chave, []);
-    grupos.get(chave).push(item);
-  }
-
-  let gruposMesclados = 0;
-  let produtosRemovidos = 0;
-  const exemplos = [];
-
-  for (const grupo of grupos.values()) {
-    if (grupo.length < 2) continue;
-    const { principal, duplicados } = await mesclarGrupo(grupo);
-    if (duplicados.length === 0) continue;
-
-    gruposMesclados += 1;
-    produtosRemovidos += duplicados.length;
-    exemplos.push({
-      principal: principal.produto.nome,
-      duplicados: duplicados.map((item) => item.produto.nome)
-    });
-  }
-
-  const indiceChaveDedup = await garantirIndiceUnicoChaveDedup();
-  const indicesHistorico = await garantirIndicesHistorico();
-
-  console.log(JSON.stringify({
-    modo: aplicar ? 'apply' : 'dry-run',
-    produtos_lidos: produtos.length,
-    produtos_com_nome_ou_metadados_para_atualizar: atualizados,
-    grupos_duplicados_para_mesclar: gruposMesclados,
-    produtos_duplicados_para_remover: produtosRemovidos,
-    indice_chave_dedup: indiceChaveDedup,
-    indices_historico: indicesHistorico,
-    exemplos: exemplos.slice(0, 10)
-  }, null, 2));
-
+  const resultado = await organizarProdutos({ aplicar });
+  console.log(JSON.stringify(resultado, null, 2));
   await mongoose.disconnect();
 }
 

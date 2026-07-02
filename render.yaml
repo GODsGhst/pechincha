@@ -17,6 +17,12 @@ services:
       # Aumente para 2+ em plano com memoria suficiente para ativar workers em paralelo.
       - key: WEB_CONCURRENCY
         value: "1"
+      - key: RUN_PRODUCT_MAINTENANCE_ON_STARTUP
+        value: "true"
+      - key: PRODUCT_CACHE_TTL_MS
+        value: "120000"
+      - key: PRODUCT_CACHE_MAX
+        value: "300"
       - key: JWT_SECRET
         generateValue: true # o Render gera um segredo aleatório
       - key: JWT_EXPIRES_IN

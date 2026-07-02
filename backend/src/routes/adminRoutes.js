@@ -15,5 +15,6 @@ router.get('/precos', adminController.listarPrecos);
 router.put('/precos/:id', adminController.atualizarPreco);
 router.delete('/precos/:id', adminController.removerPreco);
 router.post('/produtos/juntar', adminController.juntarProdutos);
+router.post('/produtos/organizar', adminController.organizarProdutosAdmin);
 
 module.exports = router;

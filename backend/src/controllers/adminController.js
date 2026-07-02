@@ -9,6 +9,7 @@ const ListaCompra = require('../models/ListaCompra');
 const AdminAuditLog = require('../models/AdminAuditLog');
 const { registrarAdminAudit } = require('../services/adminAuditService');
 const compraService = require('../services/compraService');
+const { organizarProdutos } = require('../services/productMaintenanceService');
 
 function idValido(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -318,6 +319,26 @@ async function juntarProdutos(req, res, next) {
   }
 }
 
+async function organizarProdutosAdmin(req, res, next) {
+  try {
+    const dryRun = (req.body || {}).dry_run === true;
+    const resultado = await organizarProdutos({ aplicar: !dryRun });
+
+    await registrarAdminAudit(req, {
+      acao: dryRun ? 'produto.organizar_dry_run' : 'produto.organizar',
+      alvo_tipo: 'produto',
+      resumo: dryRun
+        ? 'Simulação de organização de produtos executada'
+        : 'Organização de produtos executada',
+      dados: resultado
+    });
+
+    return res.json(resultado);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function auditoria(req, res, next) {
   try {
     const limite = Math.min(Math.max(Number(req.query.limite) || 50, 1), 100);
@@ -359,5 +380,6 @@ module.exports = {
   listarPrecos,
   atualizarPreco,
   removerPreco,
-  juntarProdutos
+  juntarProdutos,
+  organizarProdutosAdmin
 };

@@ -8,8 +8,8 @@ const pricePresentation = require('../services/pricePresentationService');
 const cacheService = require('../services/cacheService');
 const { registrarAdminAudit } = require('../services/adminAuditService');
 
-const CACHE_TTL_MS = 20 * 1000;
-const CACHE_MAX = 120;
+const CACHE_TTL_MS = Math.max(Number(process.env.PRODUCT_CACHE_TTL_MS) || 2 * 60 * 1000, 5 * 1000);
+const CACHE_MAX = Math.max(Number(process.env.PRODUCT_CACHE_MAX) || 300, 50);
 const LIMITE_FALLBACK_FILTROS = 1000;
 const HISTORICO_DETALHE_PADRAO = 80;
 const HISTORICO_DETALHE_MAX = 200;
