@@ -152,6 +152,8 @@ function check(cond, nome) {
 
   check(formatarNomeProduto('SAL PAO') === 'Pão de Sal',
     'produto legado "Sal Pão" é reformatado como Pão de Sal');
+  check(formatarNomeProduto('PAO DE SAL MAC PAD') === 'Pão de Sal',
+    'ruído de padaria não aparece no nome do pão de sal');
 
   const legadoSalPao = await Produto.create({
     nome: 'Sal Pão',

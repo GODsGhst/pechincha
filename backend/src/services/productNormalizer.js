@@ -27,6 +27,10 @@ const TOKENS_FABRICANTE = new Set([
   'mdlz', 'mondelez', 'mondelezbr', 'mondelezbrasil', 'kraft'
 ]);
 
+const TOKENS_RUIDO_POR_CATEGORIA = {
+  Padaria: new Set(['mac', 'pad'])
+};
+
 const CATEGORIAS = [
   { categoria: 'Alimentos', aliases: ['alimento', 'alimentos', 'mercearia'] },
   { categoria: 'Padaria', aliases: ['padaria', 'panificacao', 'panificação'] },
@@ -372,6 +376,11 @@ function montarExtras(tokens, marcaInfo, tipoInfo) {
     ...CATEGORIAS.flatMap((c) => c.aliases.flatMap((a) => tokenizar(a))),
     ...TOKENS_FABRICANTE
   ]);
+
+  const ruidoCategoria = tipoInfo && TOKENS_RUIDO_POR_CATEGORIA[tipoInfo.categoria];
+  if (ruidoCategoria) {
+    for (const token of ruidoCategoria) ignorar.add(token);
+  }
 
   if (tokens.includes('ao') && tokens.includes('leite')) {
     ignorar.add('ao');
