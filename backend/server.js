@@ -17,18 +17,20 @@ validarAmbiente();
 function iniciarWorker() {
   const app = require('./src/app');
   connectDB()
-    .then(async () => {
-      try {
-        const manutencao = await executarManutencaoInicial();
-        if (manutencao.status !== 'desabilitada') {
-          console.log(`Manutenção inicial: ${JSON.stringify(manutencao)}`);
-        }
-      } catch (err) {
-        console.error('Manutenção inicial falhou:', err.message);
-      }
-
+    .then(() => {
       app.listen(PORT, () => {
         console.log(`API rodando em http://localhost:${PORT} pid=${process.pid}`);
+
+        setImmediate(async () => {
+          try {
+            const manutencao = await executarManutencaoInicial();
+            if (manutencao.status !== 'desabilitada') {
+              console.log(`Manutenção inicial: ${JSON.stringify(manutencao)}`);
+            }
+          } catch (err) {
+            console.error('Manutenção inicial falhou:', err.message);
+          }
+        });
       });
     })
     .catch((err) => {
